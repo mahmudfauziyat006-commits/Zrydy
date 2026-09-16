@@ -38,5 +38,5 @@ def test_dashboard_mentions_share_and_video_duration_limit():
     assert response.status_code == 200
     html = response.get_data(as_text=True).lower()
     assert 'share' in html
-    assert '3 minutes' in html or '3-minute' in html
+    assert '10 minutes' in html or '10-minute' in html
     assert 'navigator.share' in html or 'share via' in html

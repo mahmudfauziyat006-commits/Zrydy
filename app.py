@@ -15,8 +15,8 @@ UPLOAD_FOLDER.mkdir(exist_ok=True)
 app.config['DATABASE'] = str(APP_DIR / 'social_media.db')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'local-development-secret-key')
 app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
-app.config['MAX_VIDEO_MINUTES'] = 3
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
+app.config['MAX_VIDEO_MINUTES'] = 10
 
 
 def get_db():
@@ -609,7 +609,7 @@ def create_post():
             (session['user_id'], caption, media_path, media_type),
         )
         db.commit()
-        flash('Post created successfully! Video uploads are capped at 3 minutes.', 'success')
+        flash('Post created successfully! Video uploads are capped at 10 minutes.', 'success')
         return redirect(url_for('dashboard'))
 
     return render_template('create_post.html')

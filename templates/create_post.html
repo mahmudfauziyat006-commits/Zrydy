@@ -18,7 +18,7 @@
             <label for="caption">Caption</label>
             <textarea id="caption" name="caption" rows="4" placeholder="What's on your mind?"></textarea>
 
-            <label for="media">Upload image or video</label>
+            <label for="media">Upload image or video (maximum 10 minutes)</label>
             <input type="file" id="media" name="media" accept="image/*,video/*">
 
             <label for="camera">Take a photo or video</label>
@@ -28,5 +28,25 @@
         </form>
         <p><a href="{{ url_for('dashboard') }}">Back to Feed</a></p>
     </div>
+    <script>
+        document.querySelector('form').addEventListener('submit', function (event) {
+            const input = document.getElementById('media');
+            const file = input.files && input.files[0];
+            if (!file || !file.type.startsWith('video/')) return;
+            event.preventDefault();
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = function () {
+                URL.revokeObjectURL(video.src);
+                if (video.duration > 600) {
+                    alert('Videos must be 10 minutes or shorter.');
+                    input.value = '';
+                    return;
+                }
+                event.target.submit();
+            };
+            video.src = URL.createObjectURL(file);
+        });
+    </script>
 </body>
 </html>

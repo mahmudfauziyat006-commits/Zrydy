@@ -84,7 +84,7 @@
                     {% endfor %}
                 </section>
             {% endif %}
-            <p class="upload-note">Maximum video upload length: 3 minutes.</p>
+            <p class="upload-note">Maximum video upload length: 10 minutes (up to 200 MB).</p>
 
             {% for post in posts %}
                 <article class="post-card">
@@ -139,6 +139,23 @@
         </aside>
     </main>
     <script>
+        function validateVideoDuration(input) {
+            const file = input.files && input.files[0];
+            if (!file || !file.type.startsWith('video/')) return;
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = function () {
+                URL.revokeObjectURL(video.src);
+                if (video.duration > 600) {
+                    alert('Videos must be 10 minutes or shorter.');
+                    input.value = '';
+                }
+            };
+            video.src = URL.createObjectURL(file);
+        }
+        document.getElementById('media').addEventListener('change', function () { validateVideoDuration(this); });
+        document.getElementById('camera').addEventListener('change', function () { validateVideoDuration(this); });
+
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
         let lastNotificationCount = {{ unread_message_count }};
         setInterval(function () {
