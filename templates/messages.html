@@ -26,6 +26,31 @@
                     <p class="muted">No other users have joined yet.</p>
                 {% endfor %}
             </div>
+            <div class="new-message-box">
+                <h2>Create a group chat</h2>
+                <form method="POST" action="{{ url_for('create_group') }}">
+                    <label for="group-name">Group name</label>
+                    <input id="group-name" name="name" type="text" placeholder="e.g. Weekend crew" required>
+                    <p class="muted">Choose people to add:</p>
+                    {% for person in users %}
+                        <label class="member-option">
+                            <input type="checkbox" name="member_ids" value="{{ person['id'] }}">
+                            {{ person['full_name'] }} (@{{ person['username'] }})
+                        </label>
+                    {% endfor %}
+                    <button type="submit">Create group</button>
+                </form>
+            </div>
+            <h2 class="subheading">Your group chats</h2>
+            {% for group in groups %}
+                <a class="person-row conversation-row" href="{{ url_for('group_conversation', group_id=group['id']) }}">
+                    <span class="avatar">#</span>
+                    <span><strong>{{ group['name'] }}</strong><small>{{ group['member_count'] }} members</small></span>
+                    <span class="message-arrow">Open</span>
+                </a>
+            {% else %}
+                <p class="muted">You have not created or joined a group yet.</p>
+            {% endfor %}
             <h2 class="subheading">Recent conversations</h2>
             {% for chat in conversations %}
                 <a class="person-row conversation-row" href="{{ url_for('conversation', user_id=chat['id']) }}">

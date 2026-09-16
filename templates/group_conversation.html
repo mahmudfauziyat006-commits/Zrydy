@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4f46e5">
+    <title>{{ group['name'] }} | Zrydy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="social-body">
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
+        <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages</a><a href="{{ url_for('dashboard') }}">Feed</a><a href="{{ url_for('logout') }}">Log out</a></div>
+    </nav>
+    <main class="conversation-layout">
+        <section class="conversation-panel">
+            <header class="conversation-header">
+                <span class="large-avatar">#</span>
+                <div><h1>{{ group['name'] }}</h1><p>{{ members|length }} members</p></div>
+            </header>
+            <div class="group-members">
+                {% for member in members %}<span>@{{ member['username'] }}</span>{% endfor %}
+            </div>
+            <div class="message-list">
+                {% for message in messages %}
+                    <div class="message-bubble {% if message['sender_id'] == session['user_id'] %}sent{% else %}received{% endif %}">
+                        {% if message['sender_id'] != session['user_id'] %}<strong>{{ message['full_name'] }}</strong>{% endif %}
+                        <p>{{ message['body'] }}</p>
+                        <time>{{ message['created_at'] }}</time>
+                    </div>
+                {% else %}
+                    <div class="empty-feed"><p>Start the group conversation.</p></div>
+                {% endfor %}
+            </div>
+            <form class="reply-form" method="POST" action="{{ url_for('group_conversation', group_id=group['id']) }}">
+                <input type="text" name="body" placeholder="Message the group..." autocomplete="off" required>
+                <button type="submit">Send</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

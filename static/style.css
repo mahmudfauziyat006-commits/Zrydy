@@ -559,6 +559,47 @@ th {
     color: #6b7280;
 }
 
+.people-results {
+    margin-bottom: 18px;
+    padding: 16px 18px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+}
+
+.people-results h2 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.member-option {
+    display: block;
+    width: auto;
+    margin: 8px 0;
+    font-weight: 400;
+}
+
+.member-option input {
+    width: auto;
+    margin-right: 8px;
+}
+
+.group-members {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 22px;
+    color: #6b7280;
+    font-size: 0.82rem;
+    border-bottom: 1px solid #eef0f4;
+}
+
+.group-members span {
+    padding: 5px 8px;
+    background: #eef2ff;
+    border-radius: 999px;
+}
+
 @media (max-width: 900px) {
     .feed-layout {
         grid-template-columns: 1fr;

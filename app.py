@@ -101,6 +101,42 @@ def init_db():
             )
             '''
         )
+        db.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                owner_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(owner_id) REFERENCES users(id)
+            )
+            '''
+        )
+        db.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS group_members (
+                group_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(group_id, user_id),
+                FOREIGN KEY(group_id) REFERENCES groups(id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            '''
+        )
+        db.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS group_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                sender_id INTEGER NOT NULL,
+                body TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(group_id) REFERENCES groups(id),
+                FOREIGN KEY(sender_id) REFERENCES users(id)
+            )
+            '''
+        )
 
         admin = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
         if admin is None:
@@ -129,8 +165,9 @@ def get_all_users():
     ).fetchall()
 
 
-def get_feed_posts():
+def get_feed_posts(query=''):
     db = get_db()
+    search = f'%{query.strip()}%'
     rows = db.execute(
         '''
         SELECT p.*,
@@ -141,10 +178,26 @@ def get_feed_posts():
                (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
         FROM posts p
         JOIN users u ON u.id = p.user_id
+        WHERE (? = '' OR p.caption LIKE ? OR u.username LIKE ? OR u.full_name LIKE ?)
         ORDER BY p.created_at DESC
-        '''
+        ''',
+        (query.strip(), search, search, search),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def search_users(query):
+    search = f'%{query.strip()}%'
+    return get_db().execute(
+        '''
+        SELECT id, full_name, username, bio, profile_picture
+        FROM users
+        WHERE id != ? AND (? = '' OR full_name LIKE ? OR username LIKE ?)
+        ORDER BY username
+        LIMIT 25
+        ''',
+        (session['user_id'], query.strip(), search, search),
+    ).fetchall()
 
 
 def get_comments_for_post(post_id):
@@ -289,10 +342,12 @@ def dashboard():
             'bio': 'Welcome to Zrydy.',
             'profile_picture': '',
         }
-    posts = get_feed_posts()
+    query = request.args.get('q', '').strip()
+    posts = get_feed_posts(query)
     for post in posts:
         post['comments'] = get_comments_for_post(post['id'])
-    return render_template('dashboard.html', user=user, posts=posts)
+    people = search_users(query) if 'user_id' in session else []
+    return render_template('dashboard.html', user=user, posts=posts, people=people, query=query)
 
 
 @app.route('/messages')
@@ -315,7 +370,86 @@ def messages():
         ''',
         (session['user_id'], session['user_id'], session['user_id']),
     ).fetchall()
-    return render_template('messages.html', conversations=conversations, users=get_all_users())
+    groups = db.execute(
+        '''
+        SELECT g.id, g.name, COUNT(gm2.user_id) AS member_count
+        FROM groups g
+        JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
+        LEFT JOIN group_members gm2 ON gm2.group_id = g.id
+        GROUP BY g.id
+        ORDER BY g.created_at DESC
+        ''',
+        (session['user_id'],),
+    ).fetchall()
+    return render_template('messages.html', conversations=conversations, users=get_all_users(), groups=groups)
+
+
+@app.route('/groups/create', methods=['POST'])
+@login_required
+def create_group():
+    name = request.form.get('name', '').strip()
+    member_ids = {session['user_id']}
+    for value in request.form.getlist('member_ids'):
+        if value.isdigit():
+            member_ids.add(int(value))
+    if not name:
+        flash('Enter a group name.', 'error')
+        return redirect(url_for('messages'))
+    db = get_db()
+    group = db.execute(
+        'INSERT INTO groups (name, owner_id) VALUES (?, ?) RETURNING id',
+        (name, session['user_id']),
+    ).fetchone()
+    db.executemany(
+        'INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)',
+        [(group['id'], user_id) for user_id in member_ids],
+    )
+    db.commit()
+    flash('Group created.', 'success')
+    return redirect(url_for('group_conversation', group_id=group['id']))
+
+
+@app.route('/groups/<int:group_id>', methods=['GET', 'POST'])
+@login_required
+def group_conversation(group_id):
+    db = get_db()
+    group = db.execute(
+        '''
+        SELECT g.* FROM groups g
+        JOIN group_members gm ON gm.group_id = g.id
+        WHERE g.id = ? AND gm.user_id = ?
+        ''',
+        (group_id, session['user_id']),
+    ).fetchone()
+    if group is None:
+        flash('That group could not be found.', 'error')
+        return redirect(url_for('messages'))
+    if request.method == 'POST':
+        body = request.form.get('body', '').strip()
+        if body:
+            db.execute(
+                'INSERT INTO group_messages (group_id, sender_id, body) VALUES (?, ?, ?)',
+                (group_id, session['user_id'], body),
+            )
+            db.commit()
+        return redirect(url_for('group_conversation', group_id=group_id))
+    group_messages = db.execute(
+        '''
+        SELECT gm.*, u.username, u.full_name
+        FROM group_messages gm JOIN users u ON u.id = gm.sender_id
+        WHERE gm.group_id = ? ORDER BY gm.created_at ASC, gm.id ASC
+        ''',
+        (group_id,),
+    ).fetchall()
+    members = db.execute(
+        '''
+        SELECT u.id, u.full_name, u.username
+        FROM users u JOIN group_members gm ON gm.user_id = u.id
+        WHERE gm.group_id = ? ORDER BY u.username
+        ''',
+        (group_id,),
+    ).fetchall()
+    return render_template('group_conversation.html', group=group, messages=group_messages, members=members)
 
 
 @app.route('/messages/<int:user_id>', methods=['GET', 'POST'])
