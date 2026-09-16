@@ -47,6 +47,30 @@ def test_signup_and_login_flow(client):
     assert b'dashboard' in login.data.lower()
 
 
+def test_logout_then_login_accepts_username_case(client):
+    client.post(
+        '/signup',
+        data={
+            'full_name': 'Case User',
+            'username': 'caseuser',
+            'email': 'case@example.com',
+            'password': 'secret123',
+            'confirm_password': 'secret123',
+        },
+        follow_redirects=True,
+    )
+    logout = client.get('/logout')
+    assert logout.status_code == 302
+
+    login = client.post(
+        '/login',
+        data={'username': 'CaseUser', 'password': 'secret123'},
+        follow_redirects=True,
+    )
+    assert login.status_code == 200
+    assert b'dashboard' in login.data.lower()
+
+
 def test_admin_can_view_users(client):
     login = client.post(
         '/login',

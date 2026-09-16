@@ -149,7 +149,10 @@ def init_db():
 
 def get_user_by_username(username):
     db = get_db()
-    return db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    return db.execute(
+        'SELECT * FROM users WHERE username = ? COLLATE NOCASE',
+        (username.strip(),),
+    ).fetchone()
 
 
 def get_user_by_id(user_id):
@@ -241,7 +244,7 @@ def index():
 def signup():
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
-        username = request.form.get('username', '').strip()
+        username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         confirm_password = request.form.get('confirm_password', '')
@@ -577,7 +580,7 @@ def profile():
     user = get_user_by_id(session['user_id'])
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
-        username = request.form.get('username', '').strip()
+        username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         bio = request.form.get('bio', '').strip()
         profile_picture = request.files.get('profile_picture')
