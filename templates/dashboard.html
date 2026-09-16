@@ -19,7 +19,7 @@
             <input type="search" name="q" placeholder="Search Zrydy">
         </form>
         <div class="nav-actions">
-            <a href="{{ url_for('messages') }}">Messages</a>
+            <a href="{{ url_for('messages') }}" id="messages-link">Messages{% if unread_message_count %} ({{ unread_message_count }}){% endif %}</a>
             <a href="{{ url_for('profile') }}">Profile</a>
             {% if session.get('is_admin') %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
             <a href="{{ url_for('logout') }}">Log out</a>
@@ -139,6 +139,19 @@
         </aside>
     </main>
     <script>
+        if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        let lastNotificationCount = {{ unread_message_count }};
+        setInterval(function () {
+            fetch('{{ url_for('notifications') }}').then(response => response.json()).then(data => {
+                const link = document.getElementById('messages-link');
+                link.textContent = data.count ? 'Messages (' + data.count + ')' : 'Messages';
+                if (data.count > lastNotificationCount && Notification.permission === 'granted') {
+                    new Notification('New Zrydy message', {body: data.messages[0].full_name + ' sent you a message.'});
+                }
+                lastNotificationCount = data.count;
+            }).catch(function () {});
+        }, 10000);
+
         function sharePost(url, text) {
             if (navigator.share) {
                 navigator.share({

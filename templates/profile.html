@@ -42,6 +42,9 @@
             <label for="email">Email</label>
             <input type="email" id="email" name="email" value="{{ user['email'] }}" required>
 
+            <label for="phone">Phone number for calls</label>
+            <input type="tel" id="phone" name="phone" value="{{ user['phone'] or '' }}" placeholder="e.g. +2348012345678">
+
             <label for="bio">Update Bio</label>
             <textarea id="bio" name="bio" rows="3">{{ user['bio'] }}</textarea>
 

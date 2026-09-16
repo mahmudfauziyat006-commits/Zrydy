@@ -9,17 +9,22 @@
 <body class="social-body">
     <nav class="topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
-        <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages</a><a href="{{ url_for('dashboard') }}">Feed</a></div>
+        <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages{% if unread_message_count %} ({{ unread_message_count }}){% endif %}</a><a href="{{ url_for('dashboard') }}">Feed</a></div>
     </nav>
     <main class="conversation-layout">
         <section class="conversation-panel">
             <header class="conversation-header">
-                <span class="large-avatar">{{ other_user['full_name'][:1] }}</span>
+                {% if other_user['profile_picture'] %}<img class="avatar-image large-avatar" src="{{ url_for('uploaded_file', filename=other_user['profile_picture']) }}" alt="Profile picture">{% else %}<span class="large-avatar">{{ other_user['full_name'][:1] }}</span>{% endif %}
                 <div><h1>{{ other_user['full_name'] }}</h1><p>@{{ other_user['username'] }}</p></div>
+                <div class="call-actions">
+                    {% if other_user['phone'] %}<a class="call-link" href="tel:{{ other_user['phone'] }}">Call</a>{% endif %}
+                    <a class="call-link" target="_blank" rel="noopener" href="https://meet.jit.si/zrydy-{{ session['user_id'] }}-{{ other_user['id'] }}">Video call</a>
+                </div>
             </header>
             <div class="message-list">
                 {% for message in messages %}
                     <div class="message-bubble {% if message['sender_id'] == session['user_id'] %}sent{% else %}received{% endif %}">
+                        {% if message['media_path'] and message['media_type'] == 'image' %}<img class="message-media" src="{{ url_for('uploaded_file', filename=message['media_path']) }}" alt="Shared image">{% elif message['media_path'] and message['media_type'] == 'video' %}<video class="message-media" controls src="{{ url_for('uploaded_file', filename=message['media_path']) }}"></video>{% elif message['media_path'] and message['media_type'] == 'audio' %}<audio controls src="{{ url_for('uploaded_file', filename=message['media_path']) }}"></audio>{% elif message['media_path'] %}<a href="{{ url_for('uploaded_file', filename=message['media_path']) }}">Download attachment</a>{% endif %}
                         <p>{{ message['body'] }}</p>
                         <time>{{ message['created_at'] }}</time>
                     </div>
@@ -27,11 +32,32 @@
                     <div class="empty-feed"><p>Start the conversation.</p></div>
                 {% endfor %}
             </div>
-            <form class="reply-form" method="POST" action="{{ url_for('conversation', user_id=other_user['id']) }}">
-                <input type="text" name="body" placeholder="Write a reply..." autocomplete="off" required>
+            <form class="reply-form" method="POST" enctype="multipart/form-data" action="{{ url_for('conversation', user_id=other_user['id']) }}">
+                <input type="text" name="body" placeholder="Write a reply..." autocomplete="off">
+                <input type="file" name="media" accept="image/*,video/*,audio/*">
+                <button type="button" id="record-voice">Voice note</button>
                 <button type="submit">Send</button>
             </form>
         </section>
     </main>
+    <script>
+        const recordButton = document.getElementById('record-voice');
+        let recorder;
+        let chunks = [];
+        recordButton.addEventListener('click', async function () {
+            if (!recorder) {
+                const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                recorder = new MediaRecorder(stream);
+                recorder.ondataavailable = event => chunks.push(event.data);
+                recorder.onstop = () => {
+                    const file = new File([new Blob(chunks, {type: 'audio/webm'})], 'voice-note.webm', {type: 'audio/webm'});
+                    const input = document.querySelector('input[name="media"]');
+                    const transfer = new DataTransfer(); transfer.items.add(file); input.files = transfer.files;
+                    chunks = []; recordButton.textContent = 'Voice note ready';
+                };
+                recorder.start(); recordButton.textContent = 'Stop recording';
+            } else { recorder.stop(); recorder = null; }
+        });
+    </script>
 </body>
 </html>

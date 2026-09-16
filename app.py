@@ -3,7 +3,7 @@ import sqlite3
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, flash, g, redirect, render_template, render_template_string, request, send_from_directory, session, url_for
+from flask import Flask, flash, g, jsonify, redirect, render_template, render_template_string, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -48,10 +48,14 @@ def init_db():
                 password_hash TEXT NOT NULL,
                 bio TEXT DEFAULT '',
                 profile_picture TEXT DEFAULT '',
+                phone TEXT DEFAULT '',
                 is_admin INTEGER NOT NULL DEFAULT 0
             )
             '''
         )
+        user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)').fetchall()}
+        if 'phone' not in user_columns:
+            db.execute('ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ""')
         db.execute(
             '''
             CREATE TABLE IF NOT EXISTS posts (
@@ -101,6 +105,13 @@ def init_db():
             )
             '''
         )
+        message_columns = {row['name'] for row in db.execute('PRAGMA table_info(messages)').fetchall()}
+        if 'media_path' not in message_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN media_path TEXT DEFAULT ""')
+        if 'media_type' not in message_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN media_type TEXT DEFAULT "text"')
+        if 'is_read' not in message_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0')
         db.execute(
             '''
             CREATE TABLE IF NOT EXISTS groups (
@@ -168,6 +179,20 @@ def get_all_users():
     ).fetchall()
 
 
+def get_unread_message_count():
+    if 'user_id' not in session:
+        return 0
+    return get_db().execute(
+        'SELECT COUNT(*) FROM messages WHERE recipient_id = ? AND is_read = 0',
+        (session['user_id'],),
+    ).fetchone()[0]
+
+
+@app.context_processor
+def inject_message_notifications():
+    return {'unread_message_count': get_unread_message_count()}
+
+
 def get_feed_posts(query=''):
     db = get_db()
     search = f'%{query.strip()}%'
@@ -226,6 +251,21 @@ def login_required(view):
         return view(*args, **kwargs)
 
     return wrapped_view
+
+
+@app.route('/notifications')
+@login_required
+def notifications():
+    rows = get_db().execute(
+        '''
+        SELECT m.id, m.body, m.created_at, u.full_name, u.username
+        FROM messages m JOIN users u ON u.id = m.sender_id
+        WHERE m.recipient_id = ? AND m.is_read = 0
+        ORDER BY m.created_at DESC LIMIT 10
+        ''',
+        (session['user_id'],),
+    ).fetchall()
+    return jsonify({'count': len(rows), 'messages': [dict(row) for row in rows]})
 
 
 @app.route('/uploads/<path:filename>')
@@ -466,13 +506,28 @@ def conversation(user_id):
     db = get_db()
     if request.method == 'POST':
         body = request.form.get('body', '').strip()
-        if body:
+        media = request.files.get('media')
+        media_path = ''
+        media_type = 'text'
+        if media and media.filename:
+            filename = secure_filename(media.filename)
+            media_path = filename
+            extension = Path(filename).suffix.lower()
+            media_type = 'image' if extension in ('.png', '.jpg', '.jpeg', '.gif', '.webp') else 'video' if extension in ('.mp4', '.mov', '.webm', '.avi') else 'audio' if extension in ('.mp3', '.wav', '.ogg', '.m4a') else 'file'
+            media.save(UPLOAD_FOLDER / filename)
+        if body or media_path:
             db.execute(
-                'INSERT INTO messages (sender_id, recipient_id, body) VALUES (?, ?, ?)',
-                (session['user_id'], user_id, body),
+                'INSERT INTO messages (sender_id, recipient_id, body, media_path, media_type, is_read) VALUES (?, ?, ?, ?, ?, 0)',
+                (session['user_id'], user_id, body, media_path, media_type),
             )
             db.commit()
         return redirect(url_for('conversation', user_id=user_id))
+
+    db.execute(
+        'UPDATE messages SET is_read = 1 WHERE sender_id = ? AND recipient_id = ?',
+        (user_id, session['user_id']),
+    )
+    db.commit()
 
     messages_between_users = db.execute(
         '''
@@ -583,6 +638,7 @@ def profile():
         username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
         bio = request.form.get('bio', '').strip()
+        phone = request.form.get('phone', '').strip()
         profile_picture = request.files.get('profile_picture')
         db = get_db()
 
@@ -617,8 +673,8 @@ def profile():
             profile_picture.save(UPLOAD_FOLDER / filename)
 
         db.execute(
-            'UPDATE users SET full_name = ?, username = ?, email = ?, bio = ?, profile_picture = ? WHERE id = ?',
-            (full_name, username, email, bio or user['bio'], profile_image, user['id']),
+            'UPDATE users SET full_name = ?, username = ?, email = ?, bio = ?, profile_picture = ?, phone = ? WHERE id = ?',
+            (full_name, username, email, bio or user['bio'], profile_image, phone, user['id']),
         )
         db.commit()
         session['username'] = username

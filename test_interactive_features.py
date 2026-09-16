@@ -74,3 +74,28 @@ def test_profile_picture_is_saved_and_rendered(client):
     assert response.status_code == 200
     assert b'avatar.jpg' in response.data
     assert b'profile-image' in response.data
+
+
+def test_unread_notification_and_media_message(client):
+    signup(client, 'Sender User', 'sender', 'sender@example.com')
+    client.get('/logout')
+    signup(client, 'Receiver User', 'receiver', 'receiver@example.com')
+    client.get('/logout')
+    client.post('/login', data={'username': 'sender', 'password': 'secret123'})
+
+    response = client.post(
+        '/messages/3',
+        data={'body': 'Photo for you', 'media': (io.BytesIO(b'image-bytes'), 'photo.jpg')},
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    client.get('/logout')
+    client.post('/login', data={'username': 'receiver', 'password': 'secret123'})
+    notification = client.get('/notifications')
+    assert notification.status_code == 200
+    assert notification.json['count'] == 1
+    chat = client.get('/messages/2')
+    assert b'Photo for you' in chat.data
+    assert b'photo.jpg' in chat.data
