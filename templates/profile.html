@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Profile</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <h1>Profile</h1>
+        {% if user['profile_picture'] %}
+            <img src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="Profile picture" class="profile-image">
+        {% else %}
+            <div class="profile-avatar">{{ user['full_name'][:1] }}</div>
+        {% endif %}
+
+        <p><strong>Name:</strong> {{ user['full_name'] }}</p>
+        <p><strong>Username:</strong> {{ user['username'] }}</p>
+        <p><strong>Email:</strong> {{ user['email'] }}</p>
+        <p><strong>Bio:</strong> {{ user['bio'] or 'No bio yet' }}</p>
+
+        <form method="POST" action="{{ url_for('profile') }}" enctype="multipart/form-data">
+            <label for="full_name">Full Name</label>
+            <input type="text" id="full_name" name="full_name" value="{{ user['full_name'] }}" required>
+
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" value="{{ user['username'] }}" required>
+
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{ user['email'] }}" required>
+
+            <label for="bio">Update Bio</label>
+            <textarea id="bio" name="bio" rows="3">{{ user['bio'] }}</textarea>
+
+            <label for="profile_picture">Profile Picture</label>
+            <input type="file" id="profile_picture" name="profile_picture" accept="image/*">
+
+            <button type="submit">Save Profile</button>
+        </form>
+
+        <a href="{{ url_for('dashboard') }}"><button>Back to Feed</button></a>
+    </div>
+</body>
+</html>

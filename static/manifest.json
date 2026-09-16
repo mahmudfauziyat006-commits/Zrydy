@@ -1,0 +1,18 @@
+{
+  "name": "Zrydy Social",
+  "short_name": "Zrydy",
+  "description": "A social media app for sharing posts, photos, videos, and messages.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef2ff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://tse3.mm.bing.net/th/id/OIP.AE3vE0NzefRn1VqIZAst0wHaFP?r=0&pid=Api&h=220&P=0",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

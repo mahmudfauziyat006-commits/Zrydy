@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Zrydy social app for posting photos, videos, and chatting.">
+    <title>Zrydy Sign Up</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="auth-container">
+        <a href="{{ url_for('index') }}">
+            <img src="https://tse3.mm.bing.net/th/id/OIP.AE3vE0NzefRn1VqIZAst0wHaFP?r=0&pid=Api&h=220&P=0" alt="Zrydy Logo" width="100" height="100">
+        </a>
+
+        <h1>Create Your Account</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('signup') }}" method="POST">
+            <label for="full_name">Full name</label>
+            <input type="text" id="full_name" name="full_name" placeholder="Enter your full name" required>
+
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" placeholder="Choose a username" required>
+
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email" required>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="Create a password" required>
+
+            <label for="confirm_password">Confirm password</label>
+            <input type="password" id="confirm_password" name="confirm_password" placeholder="Repeat your password" required>
+
+            <button type="submit">Create account</button>
+        </form>
+
+        <p>Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+
+        <footer class="site-footer">
+            <a href="{{ url_for('about') }}">About</a>
+            <a href="{{ url_for('contact') }}">Contact</a>
+            <a href="{{ url_for('help_page') }}">Help</a>
+            <a href="{{ url_for('faq_page') }}">FAQ</a>
+        </footer>
+    </div>
+    <script>
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            window.zrydyMobileCameraSupport = true;
+        }
+    </script>
+</body>
+</html>

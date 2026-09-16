@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zrydy Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="auth-container">
+        <img src="https://tse3.mm.bing.net/th/id/OIP.AE3vE0NzefRn1VqIZAst0wHaFP?r=0&pid=Api&h=220&P=0" alt="Zrydy Logo" width="100" height="100">
+        <h1>Welcome Back</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('login') }}">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+
+            <button type="submit">Login</button>
+        </form>
+        <p>Need an account? <a href="{{ url_for('index') }}">Sign Up</a></p>
+
+        <footer>
+            <a href="{{ url_for('about') }}">About</a>
+            <a href="{{ url_for('contact') }}">Contact: 08113373935</a>
+            <a href="{{ url_for('help_page') }}">Help</a>
+            <a href="{{ url_for('faq_page') }}">FAQ</a>
+        </footer>
+    </div>
+</body>
+</html>

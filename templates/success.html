@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Successful</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div style="max-width: 600px; margin: 80px auto; background: rgba(255,255,255,0.9); padding: 30px; border-radius: 18px; box-shadow: 0 15px 35px rgba(79,70,229,0.15);">
+        <h1>Account created successfully</h1>
+        <p><strong>Name:</strong> {{ name }}</p>
+        <p><strong>Username:</strong> {{ username }}</p>
+        <p><strong>Email:</strong> {{ email }}</p>
+        <p><strong>Message:</strong> {{ user_input }}</p>
+        <a href="{{ url_for('index') }}"><button type="button">Back to Form</button></a>
+    </div>
+</body>
+</html>

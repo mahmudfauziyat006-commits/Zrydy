@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with {{ other_user['full_name'] }} | Zrydy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="social-body">
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
+        <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages</a><a href="{{ url_for('dashboard') }}">Feed</a></div>
+    </nav>
+    <main class="conversation-layout">
+        <section class="conversation-panel">
+            <header class="conversation-header">
+                <span class="large-avatar">{{ other_user['full_name'][:1] }}</span>
+                <div><h1>{{ other_user['full_name'] }}</h1><p>@{{ other_user['username'] }}</p></div>
+            </header>
+            <div class="message-list">
+                {% for message in messages %}
+                    <div class="message-bubble {% if message['sender_id'] == session['user_id'] %}sent{% else %}received{% endif %}">
+                        <p>{{ message['body'] }}</p>
+                        <time>{{ message['created_at'] }}</time>
+                    </div>
+                {% else %}
+                    <div class="empty-feed"><p>Start the conversation.</p></div>
+                {% endfor %}
+            </div>
+            <form class="reply-form" method="POST" action="{{ url_for('conversation', user_id=other_user['id']) }}">
+                <input type="text" name="body" placeholder="Write a reply..." autocomplete="off" required>
+                <button type="submit">Send</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

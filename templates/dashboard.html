@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Zrydy feed, profile, and app activity for social sharing.">
+    <title>Zrydy Feed</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="social-body">
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
+        <form class="search-form" action="{{ url_for('dashboard') }}" method="GET">
+            <input type="search" name="q" placeholder="Search Zrydy">
+        </form>
+        <div class="nav-actions">
+            <a href="{{ url_for('messages') }}">Messages</a>
+            <a href="{{ url_for('profile') }}">Profile</a>
+            {% if session.get('is_admin') %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
+            <a href="{{ url_for('logout') }}">Log out</a>
+        </div>
+    </nav>
+
+    <main class="feed-layout">
+        <aside class="sidebar profile-summary">
+            <div class="large-avatar">{{ user['full_name'][:1] }}</div>
+            <h2>{{ user['full_name'] }}</h2>
+            <p>@{{ user['username'] }}</p>
+            <p class="muted">{{ user['bio'] or 'Share your story with the Zrydy community.' }}</p>
+            <a class="outline-link" href="{{ url_for('profile') }}">Edit profile</a>
+        </aside>
+
+        <section class="feed-column">
+            <div class="flash-stack">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endwith %}
+            </div>
+
+            <section class="composer">
+                <div class="avatar">{{ user['full_name'][:1] }}</div>
+                <form action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data">
+                    <textarea name="caption" rows="3" placeholder="What's happening, {{ user['full_name'].split()[0] }}?"></textarea>
+                    <div class="composer-actions">
+                        <label class="media-picker" for="media">Add photo or video</label>
+                        <input class="hidden-input" type="file" id="media" name="media" accept="image/*,video/*">
+                        <label class="camera-picker" for="camera">Use camera</label>
+                        <input class="hidden-input" type="file" id="camera" name="camera_media" accept="image/*,video/*" capture="environment">
+                        <button type="submit">Post</button>
+                    </div>
+                </form>
+            </section>
+
+            <div class="feed-heading">
+                <h1>Latest posts</h1>
+                <span>{{ posts|length }} posts</span>
+            </div>
+            <p class="upload-note">Maximum video upload length: 3 minutes.</p>
+
+            {% for post in posts %}
+                <article class="post-card">
+                    <header class="post-header">
+                        <div class="avatar">{{ post['full_name'][:1] }}</div>
+                        <div><strong>{{ post['full_name'] }}</strong><span>@{{ post['username'] }}</span></div>
+                        <time>{{ post['created_at'] }}</time>
+                    </header>
+                    {% if post['caption'] %}<p class="post-caption">{{ post['caption'] }}</p>{% endif %}
+                    {% if post['media_path'] and post['media_type'] == 'image' %}
+                        <img class="post-media" src="{{ url_for('uploaded_file', filename=post['media_path']) }}" alt="Post image">
+                    {% elif post['media_path'] and post['media_type'] == 'video' %}
+                        <video class="post-media" controls><source src="{{ url_for('uploaded_file', filename=post['media_path']) }}"></video>
+                    {% endif %}
+                    {% if post['comments'] %}
+                        <div class="comments-list">
+                            {% for comment in post['comments'] %}
+                                <p><strong>{{ comment['full_name'] }}</strong>: {{ comment['body'] }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="post-actions">
+                        <form action="{{ url_for('toggle_like', post_id=post['id']) }}" method="POST">
+                            <button type="submit">Like ({{ post['like_count'] or 0 }})</button>
+                        </form>
+                        <form action="{{ url_for('add_comment', post_id=post['id']) }}" method="POST">
+                            <input type="text" name="comment" placeholder="Write a comment" required>
+                            <button type="submit">Comment ({{ post['comment_count'] or 0 }})</button>
+                        </form>
+                        <button type="button" data-share-url="{{ request.url_root }}dashboard" onclick="sharePost(this.dataset.shareUrl, 'Check out this post on Zrydy')">Share</button>
+                    </div>
+                </article>
+            {% else %}
+                <section class="empty-feed"><h2>Your feed is waiting</h2><p>Share your first photo, video, or thought above.</p></section>
+            {% endfor %}
+        </section>
+
+        <aside class="sidebar suggestions">
+            <h2>Discover</h2>
+            <p>Build your community by sharing regularly and updating your profile.</p>
+            <a class="primary-link" href="{{ url_for('create_post') }}">Create a post</a>
+            <a class="outline-link" href="{{ url_for('profile') }}">View profile</a>
+        </aside>
+    </main>
+    <script>
+        function sharePost(url, text) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Zrydy',
+                    text: text,
+                    url: url
+                }).catch(function () {});
+            } else {
+                navigator.clipboard.writeText(url).then(function () {
+                    alert('Share via copied link to your clipboard.');
+                }).catch(function () {
+                    alert('Share via copy this link: ' + url);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

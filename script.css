@@ -1,0 +1,24 @@
+body{
+    background-color: rgba(147, 147, 201, 0.404);
+    text-align: center;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: larger;
+    font-size: larger;
+    padding: 30px;
+}
+fieldset{
+    border: 5px solid black;
+}
+legend{
+    font-size: xx-large;
+    font-weight: bold;
+    background-color: rgba(147, 147, 201, 0.404);
+    border: 2px solid black;
+}
+label input{
+    display: inline-block;
+    width: 150px;
+    text-align: center;
+    margin-center: 10px;
+    border: 1px solid black; 
+}
