@@ -1,9 +1,18 @@
 services:
   - type: web
-    name: zrydy-social
+    name: zrydy-app
     runtime: python
+    plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
         generateValue: true
+      - key: DATABASE_PATH
+        value: /var/data/social_media.db
+      - key: UPLOAD_PATH
+        value: /var/data/uploads
+    disk:
+      name: zrydy-data
+      mountPath: /var/data
+      sizeGB: 1

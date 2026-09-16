@@ -9,10 +9,10 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 APP_DIR = Path(__file__).resolve().parent
-UPLOAD_FOLDER = APP_DIR / 'uploads'
+UPLOAD_FOLDER = Path(os.environ.get('UPLOAD_PATH', str(APP_DIR / 'uploads')))
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
-app.config['DATABASE'] = str(APP_DIR / 'social_media.db')
+app.config['DATABASE'] = os.environ.get('DATABASE_PATH', str(APP_DIR / 'social_media.db'))
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'local-development-secret-key')
 app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
