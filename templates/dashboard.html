@@ -28,7 +28,11 @@
 
     <main class="feed-layout">
         <aside class="sidebar profile-summary">
-            <div class="large-avatar">{{ user['full_name'][:1] }}</div>
+            {% if user['profile_picture'] %}
+                <img class="avatar-image large-avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
+            {% else %}
+                <div class="large-avatar">{{ user['full_name'][:1] }}</div>
+            {% endif %}
             <h2>{{ user['full_name'] }}</h2>
             <p>@{{ user['username'] }}</p>
             <p class="muted">{{ user['bio'] or 'Share your story with the Zrydy community.' }}</p>
@@ -45,7 +49,11 @@
             </div>
 
             <section class="composer">
-                <div class="avatar">{{ user['full_name'][:1] }}</div>
+                {% if user['profile_picture'] %}
+                    <img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
+                {% else %}
+                    <div class="avatar">{{ user['full_name'][:1] }}</div>
+                {% endif %}
                 <form action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data">
                     <textarea name="caption" rows="3" placeholder="What's happening, {{ user['full_name'].split()[0] }}?"></textarea>
                     <div class="composer-actions">
@@ -81,7 +89,11 @@
             {% for post in posts %}
                 <article class="post-card">
                     <header class="post-header">
-                        <div class="avatar">{{ post['full_name'][:1] }}</div>
+                        {% if post['profile_picture'] %}
+                            <img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=post['profile_picture']) }}" alt="{{ post['full_name'] }} profile picture">
+                        {% else %}
+                            <div class="avatar">{{ post['full_name'][:1] }}</div>
+                        {% endif %}
                         <div><strong>{{ post['full_name'] }}</strong><span>@{{ post['username'] }}</span></div>
                         <time>{{ post['created_at'] }}</time>
                     </header>
@@ -91,13 +103,18 @@
                     {% elif post['media_path'] and post['media_type'] == 'video' %}
                         <video class="post-media" controls><source src="{{ url_for('uploaded_file', filename=post['media_path']) }}"></video>
                     {% endif %}
-                    {% if post['comments'] %}
-                        <div class="comments-list">
-                            {% for comment in post['comments'] %}
-                                <p><strong>{{ comment['full_name'] }}</strong>: {{ comment['body'] }}</p>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
+                    <details class="comments-panel" {% if post['comments'] %}open{% endif %}>
+                        <summary>View comments ({{ post['comment_count'] or 0 }})</summary>
+                        {% if post['comments'] %}
+                            <div class="comments-list">
+                                {% for comment in post['comments'] %}
+                                    <p><strong>{{ comment['full_name'] }}</strong>: {{ comment['body'] }}</p>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="muted">No comments yet. Be the first to comment.</p>
+                        {% endif %}
+                    </details>
                     <div class="post-actions">
                         <form action="{{ url_for('toggle_like', post_id=post['id']) }}" method="POST">
                             <button type="submit">Like ({{ post['like_count'] or 0 }})</button>

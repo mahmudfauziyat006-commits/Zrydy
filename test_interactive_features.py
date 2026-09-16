@@ -1,3 +1,5 @@
+import io
+
 import pytest
 
 from app import app
@@ -53,3 +55,22 @@ def test_user_can_create_and_use_group_chat(client):
     response = client.post('/groups/1', data={'body': 'Hello team'}, follow_redirects=True)
     assert response.status_code == 200
     assert b'Hello team' in response.data
+
+
+def test_profile_picture_is_saved_and_rendered(client):
+    signup(client, 'Picture User', 'pictureuser', 'picture@example.com')
+    response = client.post(
+        '/profile',
+        data={
+            'full_name': 'Picture User',
+            'username': 'pictureuser',
+            'email': 'picture@example.com',
+            'bio': 'Has a picture',
+            'profile_picture': (io.BytesIO(b'fake-image'), 'avatar.jpg'),
+        },
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b'avatar.jpg' in response.data
+    assert b'profile-image' in response.data
