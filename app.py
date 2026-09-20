@@ -7,23 +7,53 @@ from flask import Flask, flash, g, jsonify, redirect, render_template, render_te
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
 app = Flask(__name__)
 APP_DIR = Path(__file__).resolve().parent
 UPLOAD_FOLDER = Path(os.environ.get('UPLOAD_PATH', str(APP_DIR / 'uploads')))
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
 app.config['DATABASE'] = os.environ.get('DATABASE_PATH', str(APP_DIR / 'social_media.db'))
+app.config['DATABASE_URL'] = os.environ.get('DATABASE_URL', '').strip()
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'local-development-secret-key')
 app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 app.config['MAX_VIDEO_MINUTES'] = 10
 
 
+class PostgresDatabase:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, parameters=()):
+        return self.connection.execute(sql.replace('?', '%s'), parameters)
+
+    def executemany(self, sql, parameters):
+        return self.connection.executemany(sql.replace('?', '%s'), parameters)
+
+    def commit(self):
+        self.connection.commit()
+
+    def close(self):
+        self.connection.close()
+
+
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
-        db = sqlite3.connect(app.config['DATABASE'])
-        db.row_factory = sqlite3.Row
+        if app.config['DATABASE_URL']:
+            if psycopg is None:
+                raise RuntimeError('psycopg is required when DATABASE_URL is configured')
+            db = PostgresDatabase(psycopg.connect(app.config['DATABASE_URL'], row_factory=dict_row))
+        else:
+            db = sqlite3.connect(app.config['DATABASE'])
+            db.row_factory = sqlite3.Row
         g._database = db
     return db
 
@@ -35,8 +65,66 @@ def close_db(_exception):
         db.close()
 
 
+def init_postgres_db():
+    db = get_db()
+    statements = [
+        '''CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY, full_name TEXT NOT NULL, username TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, bio TEXT DEFAULT '',
+            profile_picture TEXT DEFAULT '', phone TEXT DEFAULT '', is_admin INTEGER NOT NULL DEFAULT 0
+        )''',
+        '''CREATE TABLE IF NOT EXISTS posts (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), caption TEXT,
+            media_path TEXT, media_type TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS likes (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+            post_id INTEGER NOT NULL REFERENCES posts(id), UNIQUE(user_id, post_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS comments (
+            id SERIAL PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id),
+            user_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS messages (
+            id SERIAL PRIMARY KEY, sender_id INTEGER NOT NULL REFERENCES users(id),
+            recipient_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
+            media_path TEXT DEFAULT '', media_type TEXT DEFAULT 'text', is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS groups (
+            id SERIAL PRIMARY KEY, name TEXT NOT NULL, owner_id INTEGER NOT NULL REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS group_members (
+            group_id INTEGER NOT NULL REFERENCES groups(id), user_id INTEGER NOT NULL REFERENCES users(id),
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(group_id, user_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS group_messages (
+            id SERIAL PRIMARY KEY, group_id INTEGER NOT NULL REFERENCES groups(id),
+            sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
+    ]
+    for statement in statements:
+        db.execute(statement)
+    db.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_path TEXT DEFAULT ''")
+    db.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT 'text'")
+    db.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER NOT NULL DEFAULT 0')
+    admin = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
+    if admin is None:
+        db.execute(
+            'INSERT INTO users (full_name, username, email, password_hash, bio, profile_picture, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            ('System Admin', 'admin', 'admin@zrydy.com', generate_password_hash('admin123'), 'Welcome to Zrydy', '', 1),
+        )
+    db.commit()
+
+
 def init_db():
     with app.app_context():
+        if app.config['DATABASE_URL']:
+            init_postgres_db()
+            return
         db = get_db()
         db.execute(
             '''
@@ -161,7 +249,7 @@ def init_db():
 def get_user_by_username(username):
     db = get_db()
     return db.execute(
-        'SELECT * FROM users WHERE username = ? COLLATE NOCASE',
+        'SELECT * FROM users WHERE LOWER(username) = LOWER(?)',
         (username.strip(),),
     ).fetchone()
 
@@ -444,7 +532,7 @@ def create_group():
         (name, session['user_id']),
     ).fetchone()
     db.executemany(
-        'INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)',
+        'INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING',
         [(group['id'], user_id) for user_id in member_ids],
     )
     db.commit()
