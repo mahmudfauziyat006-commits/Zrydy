@@ -394,7 +394,9 @@ def get_comments_for_post(post_id):
 def login_required(view):
     @wraps(view)
     def wrapped_view(*args, **kwargs):
-        if 'user_id' not in session:
+        if 'user_id' not in session or get_user_by_id(session['user_id']) is None:
+            session.clear()
+            flash('Your session expired. Please log in again.', 'error')
             return redirect(url_for('login'))
         return view(*args, **kwargs)
 
@@ -538,6 +540,10 @@ def forgot_password():
 def dashboard():
     if 'user_id' in session:
         user = get_user_by_id(session['user_id'])
+        if user is None:
+            session.clear()
+            flash('Your session expired. Please log in again.', 'error')
+            return redirect(url_for('login'))
     else:
         user = {
             'full_name': 'Guest User',

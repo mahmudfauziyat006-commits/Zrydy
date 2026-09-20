@@ -71,6 +71,16 @@ def test_logout_then_login_accepts_username_case(client):
     assert b'dashboard' in login.data.lower()
 
 
+def test_stale_session_redirects_to_login_instead_of_server_error(client):
+    with client.session_transaction() as session:
+        session['user_id'] = 999999
+        session['username'] = 'deleted-user'
+
+    response = client.get('/dashboard', follow_redirects=True)
+    assert response.status_code == 200
+    assert b'session expired' in response.data.lower()
+
+
 def test_admin_can_view_users(client):
     login = client.post(
         '/login',
