@@ -105,6 +105,19 @@ def init_postgres_db():
             sender_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''',
+        '''CREATE TABLE IF NOT EXISTS follows (
+            follower_id INTEGER NOT NULL REFERENCES users(id), followed_id INTEGER NOT NULL REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(follower_id, followed_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS blocks (
+            blocker_id INTEGER NOT NULL REFERENCES users(id), blocked_id INTEGER NOT NULL REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(blocker_id, blocked_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), actor_id INTEGER REFERENCES users(id),
+            kind TEXT NOT NULL, body TEXT NOT NULL, target_url TEXT DEFAULT '', is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
     ]
     for statement in statements:
         db.execute(statement)
@@ -236,6 +249,21 @@ def init_db():
             )
             '''
         )
+        db.execute('''CREATE TABLE IF NOT EXISTS follows (
+            follower_id INTEGER NOT NULL, followed_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(follower_id, followed_id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS blocks (
+            blocker_id INTEGER NOT NULL, blocked_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(blocker_id, blocked_id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, actor_id INTEGER,
+            kind TEXT NOT NULL, body TEXT NOT NULL, target_url TEXT DEFAULT '',
+            is_read INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
         admin = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
         if admin is None:
@@ -276,14 +304,42 @@ def get_unread_message_count():
     ).fetchone()[0]
 
 
+def get_unread_notification_count():
+    if 'user_id' not in session:
+        return 0
+    return get_db().execute(
+        'SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0',
+        (session['user_id'],),
+    ).fetchone()[0]
+
+
+def notify(user_id, actor_id, kind, body, target_url=''):
+    if user_id == actor_id:
+        return
+    get_db().execute(
+        'INSERT INTO notifications (user_id, actor_id, kind, body, target_url) VALUES (?, ?, ?, ?, ?)',
+        (user_id, actor_id, kind, body, target_url),
+    )
+
+
 @app.context_processor
 def inject_message_notifications():
-    return {'unread_message_count': get_unread_message_count()}
+    return {
+        'unread_message_count': get_unread_message_count(),
+        'unread_notification_count': get_unread_notification_count(),
+    }
 
 
-def get_feed_posts(query=''):
+def get_feed_posts(query='', feed_mode='for_you'):
     db = get_db()
     search = f'%{query.strip()}%'
+    user_id = session.get('user_id', 0)
+    following_clause = "" if feed_mode != 'following' else 'AND (p.user_id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followed_id = p.user_id))'
+    blocked_clause = 'AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ? AND b.blocked_id = p.user_id)'
+    parameters = [query.strip(), search, search, search]
+    if feed_mode == 'following':
+        parameters.extend([user_id, user_id])
+    parameters.append(user_id)
     rows = db.execute(
         '''
         SELECT p.*,
@@ -295,9 +351,11 @@ def get_feed_posts(query=''):
         FROM posts p
         JOIN users u ON u.id = p.user_id
         WHERE (? = '' OR p.caption LIKE ? OR u.username LIKE ? OR u.full_name LIKE ?)
+        {following_clause}
+        {blocked_clause}
         ORDER BY p.created_at DESC
-        ''',
-        (query.strip(), search, search, search),
+        '''.format(following_clause=following_clause, blocked_clause=blocked_clause),
+        parameters,
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -308,11 +366,13 @@ def search_users(query):
         '''
         SELECT id, full_name, username, bio, profile_picture
         FROM users
-        WHERE id != ? AND (? = '' OR full_name LIKE ? OR username LIKE ?)
+                WHERE id != ?
+                    AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ? AND b.blocked_id = users.id)
+                    AND (? = '' OR full_name LIKE ? OR username LIKE ?)
         ORDER BY username
         LIMIT 25
         ''',
-        (session['user_id'], query.strip(), search, search),
+                (session['user_id'], session['user_id'], query.strip(), search, search),
     ).fetchall()
 
 
@@ -344,7 +404,8 @@ def login_required(view):
 @app.route('/notifications')
 @login_required
 def notifications():
-    rows = get_db().execute(
+    db = get_db()
+    rows = db.execute(
         '''
         SELECT m.id, m.body, m.created_at, u.full_name, u.username
         FROM messages m JOIN users u ON u.id = m.sender_id
@@ -353,7 +414,18 @@ def notifications():
         ''',
         (session['user_id'],),
     ).fetchall()
-    return jsonify({'count': len(rows), 'messages': [dict(row) for row in rows]})
+    alerts = db.execute(
+        '''SELECT n.*, u.username AS actor_username, u.full_name AS actor_name
+           FROM notifications n LEFT JOIN users u ON u.id = n.actor_id
+           WHERE n.user_id = ? AND n.is_read = 0
+           ORDER BY n.created_at DESC LIMIT 20''',
+        (session['user_id'],),
+    ).fetchall()
+    return jsonify({
+        'count': len(rows) + len(alerts),
+        'messages': [dict(row) for row in rows],
+        'notifications': [dict(row) for row in alerts],
+    })
 
 
 @app.route('/uploads/<path:filename>')
@@ -474,11 +546,83 @@ def dashboard():
             'profile_picture': '',
         }
     query = request.args.get('q', '').strip()
-    posts = get_feed_posts(query)
+    feed_mode = request.args.get('feed', 'for_you')
+    if feed_mode not in {'for_you', 'following'}:
+        feed_mode = 'for_you'
+    posts = get_feed_posts(query, feed_mode)
     for post in posts:
         post['comments'] = get_comments_for_post(post['id'])
     people = search_users(query) if 'user_id' in session else []
-    return render_template('dashboard.html', user=user, posts=posts, people=people, query=query)
+    if 'user_id' in session:
+        db = get_db()
+        people = [dict(person) for person in people]
+        for person in people:
+            person['following'] = bool(db.execute('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?', (session['user_id'], person['id'])).fetchone())
+            person['blocked'] = bool(db.execute('SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?', (session['user_id'], person['id'])).fetchone())
+    return render_template('dashboard.html', user=user, posts=posts, people=people, query=query, feed_mode=feed_mode)
+
+
+@app.route('/live')
+@login_required
+def live():
+    return render_template('live.html')
+
+
+@app.route('/user/<int:user_id>/follow', methods=['POST'])
+@login_required
+def toggle_follow(user_id):
+    if user_id == session['user_id'] or get_user_by_id(user_id) is None:
+        return redirect(request.referrer or url_for('dashboard'))
+    db = get_db()
+    existing = db.execute('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?', (session['user_id'], user_id)).fetchone()
+    if existing:
+        db.execute('DELETE FROM follows WHERE follower_id = ? AND followed_id = ?', (session['user_id'], user_id))
+    else:
+        db.execute('INSERT INTO follows (follower_id, followed_id) VALUES (?, ?)', (session['user_id'], user_id))
+        notify(user_id, session['user_id'], 'follow', f"{session.get('username', 'Someone')} started following you.", url_for('dashboard', q=session.get('username', '')))
+    db.commit()
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/user/<int:user_id>/block', methods=['POST'])
+@login_required
+def toggle_block(user_id):
+    if user_id == session['user_id']:
+        return redirect(request.referrer or url_for('dashboard'))
+    db = get_db()
+    existing = db.execute('SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?', (session['user_id'], user_id)).fetchone()
+    if existing:
+        db.execute('DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?', (session['user_id'], user_id))
+        flash('User unblocked.', 'success')
+    else:
+        db.execute('INSERT INTO blocks (blocker_id, blocked_id) VALUES (?, ?)', (session['user_id'], user_id))
+        db.execute('DELETE FROM follows WHERE (follower_id = ? AND followed_id = ?) OR (follower_id = ? AND followed_id = ?)', (session['user_id'], user_id, user_id, session['user_id']))
+        flash('User blocked.', 'success')
+    db.commit()
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/notifications/read', methods=['POST'])
+@login_required
+def mark_notifications_read():
+    db = get_db()
+    db.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ?', (session['user_id'],))
+    db.commit()
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/messages/<int:user_id>/delete', methods=['POST'])
+@login_required
+def delete_conversation(user_id):
+    db = get_db()
+    db.execute(
+        '''DELETE FROM messages WHERE (sender_id = ? AND recipient_id = ?)
+           OR (sender_id = ? AND recipient_id = ?)''',
+        (session['user_id'], user_id, user_id, session['user_id']),
+    )
+    db.commit()
+    flash('Conversation deleted from your inbox.', 'success')
+    return redirect(url_for('messages'))
 
 
 @app.route('/messages')

@@ -10,6 +10,33 @@ body {
     text-align: center;
     color: #1f2937;
     padding: 30px 20px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+body.dark-mode {
+    background: #111827;
+    color: #e5e7eb;
+}
+
+body.dark-mode .topbar,
+body.dark-mode .sidebar,
+body.dark-mode .composer,
+body.dark-mode .post-card,
+body.dark-mode .empty-feed,
+body.dark-mode .message-panel,
+body.dark-mode .conversation-panel,
+body.dark-mode .live-panel,
+body.dark-mode .people-results {
+    background: #1f2937;
+    border-color: #374151;
+    color: #e5e7eb;
+}
+
+body.dark-mode input,
+body.dark-mode textarea {
+    background: #111827;
+    color: #f9fafb;
+    border-color: #4b5563;
 }
 
 img {
@@ -202,6 +229,18 @@ th {
     font-size: 0.92rem;
     font-weight: 700;
     text-decoration: none;
+}
+
+.theme-toggle,
+.tool-button {
+    width: auto;
+    margin: 0;
+    padding: 7px 10px;
+    background: transparent;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    border-radius: 8px;
+    font-size: 0.8rem;
 }
 
 .feed-layout {
@@ -412,6 +451,80 @@ th {
     text-decoration: none;
     font-size: 0.85rem;
     font-weight: 700;
+}
+
+.feed-tabs {
+    display: flex;
+    gap: 18px;
+    margin: 0 4px 18px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.feed-tabs a {
+    padding: 8px 2px;
+    color: #6b7280;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.feed-tabs a.active {
+    color: #4338ca;
+    border-bottom: 2px solid #4338ca;
+}
+
+.person-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.person-actions form,
+.conversation-row form,
+.call-actions form {
+    width: auto;
+}
+
+.person-actions button,
+.conversation-row button {
+    width: auto;
+    margin: 0;
+    padding: 6px 9px;
+    font-size: 0.75rem;
+}
+
+.conversation-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    color: inherit;
+    text-decoration: none;
+}
+
+.notification-panel,
+.live-panel {
+    padding: 18px 22px;
+    background: #fff;
+    border-bottom: 1px solid #eef0f4;
+}
+
+.notification-panel h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+}
+
+.live-layout {
+    width: min(760px, 94%);
+    margin: 32px auto;
+}
+
+.live-panel video {
+    display: block;
+    width: 100%;
+    min-height: 300px;
+    margin: 18px 0;
+    background: #111827;
+    border-radius: 12px;
 }
 
 .primary-link {

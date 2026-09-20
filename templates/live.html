@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Live | Zrydy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="social-body">
+    <nav class="topbar"><a class="brand" href="{{ url_for('dashboard') }}">zrydy</a><div class="nav-actions"><a href="{{ url_for('messages') }}">Inbox</a><a href="{{ url_for('dashboard') }}">Feed</a></div></nav>
+    <main class="live-layout">
+        <section class="live-panel">
+            <h1>Go live</h1>
+            <p class="muted">Start a camera preview and share this room link with your followers. A true multi-user live broadcast requires a streaming provider.</p>
+            <video id="live-preview" autoplay muted playsinline></video>
+            <div class="composer-actions"><button id="start-live" type="button">Start camera</button><button id="stop-live" type="button">Stop</button><button id="share-live" type="button">Share live link</button></div>
+        </section>
+    </main>
+    <script>
+        let stream;
+        document.getElementById('start-live').onclick = async function () {
+            stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+            document.getElementById('live-preview').srcObject = stream;
+        };
+        document.getElementById('stop-live').onclick = function () {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            document.getElementById('live-preview').srcObject = null;
+        };
+        document.getElementById('share-live').onclick = function () {
+            if (navigator.share) navigator.share({title: 'Join my Zrydy live', url: location.href});
+            else navigator.clipboard.writeText(location.href).then(() => alert('Live link copied.'));
+        };
+    </script>
+</body>
+</html>

@@ -19,8 +19,10 @@
             <input type="search" name="q" placeholder="Search Zrydy">
         </form>
         <div class="nav-actions">
-            <a href="{{ url_for('messages') }}" id="messages-link">Messages{% if unread_message_count %} ({{ unread_message_count }}){% endif %}</a>
+            <a href="{{ url_for('messages') }}" id="messages-link">Inbox{% if unread_message_count %} ({{ unread_message_count }}){% endif %}</a>
+            <a href="#notifications" id="notification-link">Notifications{% if unread_notification_count %} ({{ unread_notification_count }}){% endif %}</a>
             <a href="{{ url_for('profile') }}">Profile</a>
+            <button type="button" class="theme-toggle" id="theme-toggle">Dark mode</button>
             {% if session.get('is_admin') %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
             <a href="{{ url_for('logout') }}">Log out</a>
         </div>
@@ -55,8 +57,10 @@
                     <div class="avatar">{{ user['full_name'][:1] }}</div>
                 {% endif %}
                 <form action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data">
-                    <textarea name="caption" rows="3" placeholder="What's happening, {{ user['full_name'].split()[0] }}?"></textarea>
+                    <textarea id="post-caption" name="caption" rows="3" placeholder="What's happening, {{ user['full_name'].split()[0] }}?"></textarea>
                     <div class="composer-actions">
+                        <button type="button" class="tool-button" data-emoji-target="post-caption">😊 Emojis</button>
+                        <button type="button" class="tool-button" data-sticker-target="post-caption">Sticker</button>
                         <label class="media-picker" for="media">Add photo or video</label>
                         <input class="hidden-input" type="file" id="media" name="media" accept="image/*,video/*">
                         <label class="camera-picker" for="camera">Use camera</label>
@@ -70,6 +74,12 @@
                 <h1>{% if query %}Search results{% else %}Latest posts{% endif %}</h1>
                 <span>{{ posts|length }} posts</span>
             </div>
+            {% if not query %}
+                <nav class="feed-tabs">
+                    <a class="{% if feed_mode == 'for_you' %}active{% endif %}" href="{{ url_for('dashboard', feed='for_you') }}">For You</a>
+                    <a class="{% if feed_mode == 'following' %}active{% endif %}" href="{{ url_for('dashboard', feed='following') }}">Following</a>
+                </nav>
+            {% endif %}
             {% if query %}
                 <section class="people-results">
                     <h2>People matching “{{ query }}”</h2>
@@ -77,7 +87,10 @@
                         <a class="person-row" href="{{ url_for('conversation', user_id=person['id']) }}">
                             <span class="avatar">{{ person['full_name'][:1] }}</span>
                             <span><strong>{{ person['full_name'] }}</strong><small>@{{ person['username'] }}</small></span>
-                            <span class="message-arrow">Message</span>
+                            <span class="person-actions">
+                                <form method="POST" action="{{ url_for('toggle_follow', user_id=person['id']) }}"><button type="submit">{{ 'Following' if person['following'] else 'Follow' }}</button></form>
+                                <form method="POST" action="{{ url_for('toggle_block', user_id=person['id']) }}"><button type="submit">{{ 'Unblock' if person['blocked'] else 'Block' }}</button></form>
+                            </span>
                         </a>
                     {% else %}
                         <p class="muted">No people matched that search.</p>
@@ -136,6 +149,7 @@
             <p>Build your community by sharing regularly and updating your profile.</p>
             <a class="primary-link" href="{{ url_for('create_post') }}">Create a post</a>
             <a class="outline-link" href="{{ url_for('profile') }}">View profile</a>
+            <a class="primary-link" href="{{ url_for('live') }}">Go live</a>
         </aside>
     </main>
     <script>
@@ -156,12 +170,27 @@
         document.getElementById('media').addEventListener('change', function () { validateVideoDuration(this); });
         document.getElementById('camera').addEventListener('change', function () { validateVideoDuration(this); });
 
+        const savedTheme = localStorage.getItem('zrydy-theme');
+        if (savedTheme === 'dark') document.body.classList.add('dark-mode');
+        document.getElementById('theme-toggle').addEventListener('click', function () {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('zrydy-theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+            this.textContent = document.body.classList.contains('dark-mode') ? 'Light mode' : 'Dark mode';
+        });
+        document.querySelectorAll('[data-emoji-target]').forEach(button => button.addEventListener('click', function () {
+            document.getElementById(this.dataset.emojiTarget).value += ' 😊 ❤️ 😂 🔥 🙌';
+        }));
+        document.querySelectorAll('[data-sticker-target]').forEach(button => button.addEventListener('click', function () {
+            document.getElementById(this.dataset.stickerTarget).value += ' [sticker: 🎉]';
+        }));
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
         let lastNotificationCount = {{ unread_message_count }};
         setInterval(function () {
             fetch('{{ url_for('notifications') }}').then(response => response.json()).then(data => {
                 const link = document.getElementById('messages-link');
-                link.textContent = data.count ? 'Messages (' + data.count + ')' : 'Messages';
+                link.textContent = data.messages.length ? 'Inbox (' + data.messages.length + ')' : 'Inbox';
+                const notificationLink = document.getElementById('notification-link');
+                notificationLink.textContent = data.notifications.length ? 'Notifications (' + data.notifications.length + ')' : 'Notifications';
                 if (data.count > lastNotificationCount && Notification.permission === 'granted') {
                     new Notification('New Zrydy message', {body: data.messages[0].full_name + ' sent you a message.'});
                 }

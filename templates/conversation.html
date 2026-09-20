@@ -19,6 +19,7 @@
                 <div class="call-actions">
                     {% if other_user['phone'] %}<a class="call-link" href="tel:{{ other_user['phone'] }}">Call</a>{% endif %}
                     <a class="call-link" target="_blank" rel="noopener" href="https://meet.jit.si/zrydy-{{ session['user_id'] }}-{{ other_user['id'] }}">Video call</a>
+                    <form method="POST" action="{{ url_for('toggle_block', user_id=other_user['id']) }}"><button class="call-link" type="submit">Block</button></form>
                 </div>
             </header>
             <div class="message-list">
@@ -33,14 +34,18 @@
                 {% endfor %}
             </div>
             <form class="reply-form" method="POST" enctype="multipart/form-data" action="{{ url_for('conversation', user_id=other_user['id']) }}">
-                <input type="text" name="body" placeholder="Write a reply..." autocomplete="off">
+                <input id="chat-body" type="text" name="body" placeholder="Write a reply..." autocomplete="off">
                 <input type="file" name="media" accept="image/*,video/*,audio/*">
+                <button type="button" class="tool-button" id="chat-emoji">😊</button>
+                <button type="button" class="tool-button" id="chat-sticker">Sticker</button>
                 <button type="button" id="record-voice">Voice note</button>
                 <button type="submit">Send</button>
             </form>
         </section>
     </main>
     <script>
+        document.getElementById('chat-emoji').onclick = function () { document.getElementById('chat-body').value += ' 😊 ❤️ 😂 🔥'; };
+        document.getElementById('chat-sticker').onclick = function () { document.getElementById('chat-body').value += ' [sticker: 🎉]'; };
         const recordButton = document.getElementById('record-voice');
         let recorder;
         let chunks = [];

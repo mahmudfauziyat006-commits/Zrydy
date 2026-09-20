@@ -99,3 +99,38 @@ def test_unread_notification_and_media_message(client):
     chat = client.get('/messages/2')
     assert b'Photo for you' in chat.data
     assert b'photo.jpg' in chat.data
+
+
+def test_follow_notification_feed_modes_and_block(client):
+    signup(client, 'Creator User', 'creator', 'creator@example.com')
+    client.post('/create-post', data={'caption': 'Creator only post'}, follow_redirects=True)
+    client.get('/logout')
+    signup(client, 'Follower User', 'follower', 'follower@example.com')
+
+    follow = client.post('/user/2/follow', follow_redirects=True)
+    assert follow.status_code == 200
+    client.get('/logout')
+    client.post('/login', data={'username': 'creator', 'password': 'secret123'})
+    alerts = client.get('/notifications').json
+    assert alerts['count'] == 1
+    assert 'following' in alerts['notifications'][0]['body']
+
+    client.get('/logout')
+    client.post('/login', data={'username': 'follower', 'password': 'secret123'})
+    following = client.get('/dashboard?feed=following')
+    assert b'Creator only post' in following.data
+
+    blocked = client.post('/user/2/block', follow_redirects=True)
+    assert blocked.status_code == 200
+    following_after_block = client.get('/dashboard?feed=following')
+    assert b'Creator only post' not in following_after_block.data
+
+
+def test_conversation_can_be_deleted(client):
+    signup(client, 'First User', 'first', 'first@example.com')
+    client.get('/logout')
+    signup(client, 'Second User', 'second', 'second@example.com')
+    client.post('/messages/2', data={'body': 'Remove this chat'}, follow_redirects=True)
+    deleted = client.post('/messages/2/delete', follow_redirects=True)
+    assert deleted.status_code == 200
+    assert b'Remove this chat' not in deleted.data

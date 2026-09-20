@@ -13,7 +13,12 @@
     </nav>
     <main class="messages-layout">
         <section class="message-panel">
-            <div class="section-heading"><h1>Messages</h1><span>Talk to your community</span></div>
+            <div class="section-heading"><h1>Inbox</h1><span>Talk to your community{% if unread_message_count or unread_notification_count %} · {{ unread_message_count + unread_notification_count }} new{% endif %}</span></div>
+            <section class="notification-panel" id="notifications">
+                <h2>Notifications</h2>
+                <p class="muted">New messages and follower activity appear here.</p>
+                <form method="POST" action="{{ url_for('mark_notifications_read') }}"><button type="submit">Mark follower notifications read</button></form>
+            </section>
             <div class="new-message-box">
                 <h2>Start a conversation</h2>
                 {% for person in users %}
@@ -53,11 +58,14 @@
             {% endfor %}
             <h2 class="subheading">Recent conversations</h2>
             {% for chat in conversations %}
-                <a class="person-row conversation-row" href="{{ url_for('conversation', user_id=chat['id']) }}">
+                <div class="person-row conversation-row">
+                    <a class="conversation-link" href="{{ url_for('conversation', user_id=chat['id']) }}">
                     <span class="avatar">{{ chat['full_name'][:1] }}</span>
                     <span><strong>{{ chat['full_name'] }}</strong><small>{{ chat['body']|truncate(58) }}</small></span>
                     <time>{{ chat['created_at'] }}</time>
-                </a>
+                    </a>
+                    <form method="POST" action="{{ url_for('delete_conversation', user_id=chat['id']) }}"><button type="submit">Delete</button></form>
+                </div>
             {% else %}
                 <div class="empty-feed"><p>Your conversations will appear here.</p></div>
             {% endfor %}
