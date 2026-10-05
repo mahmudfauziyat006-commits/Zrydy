@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Zrydy</title>
+  <defs>
+    <linearGradient id="mark" x1="128" y1="144" x2="384" y2="368" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d4e6ee"/>
+      <stop offset="0.58" stop-color="#9fc2d2"/>
+      <stop offset="1" stop-color="#e5a98d"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#20262b"/>
+  <path d="M130 152h252L130 360h252" fill="none" stroke="url(#mark)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M92 92h328v328H92z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="2"/>
+</svg>

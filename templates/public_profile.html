@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#101315">
+    <title>@{{ user['username'] }} | Zrydy</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
+</head>
+<body class="social-body dark-mode">
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
+        <form class="search-form" action="{{ url_for('dashboard') }}" method="GET">
+            <input type="search" name="q" placeholder="Search people or posts" value="{{ request.args.get('q', '') }}">
+        </form>
+        <div class="nav-actions">
+            <a href="{{ url_for('dashboard') }}">Home</a>
+            {% if session.get('user_id') %}<a href="{{ url_for('profile') }}">Settings</a>{% else %}<a href="{{ url_for('login') }}">Log in</a>{% endif %}
+            <button class="theme-toggle" type="button" data-theme-toggle>Light mode</button>
+        </div>
+    </nav>
+    <main class="public-profile-layout">
+        <section class="public-profile-header">
+            {% if user['profile_picture'] %}
+                <img class="public-profile-avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
+            {% else %}
+                <div class="public-profile-avatar avatar-fallback">{{ user['full_name'][:1] }}</div>
+            {% endif %}
+            <div class="public-profile-info">
+                <p class="profile-handle">@{{ user['username'] }}</p>
+                <h1>{{ user['full_name'] }}</h1>
+                <p>{{ user['bio'] or 'No bio yet.' }}</p>
+                <div class="profile-stats">
+                    <span><strong>{{ user['post_count'] }}</strong> posts</span>
+                    <span><strong>{{ user['like_count'] }}</strong> likes</span>
+                    <span><strong>{{ user['follower_count'] }}</strong> followers</span>
+                    <span><strong>{{ user['following_count'] }}</strong> following</span>
+                </div>
+                {% if session.get('user_id') and not is_self %}
+                    <form class="profile-follow-form" method="POST" action="{{ url_for('toggle_follow', user_id=user['id']) }}">
+                        <button type="submit" aria-label="{{ 'Unfollow' if user['following'] else 'Follow' }} @{{ user['username'] }}">{{ 'Following' if user['following'] else '+ Follow' }}</button>
+                    </form>
+                {% elif not is_self %}
+                    <a class="profile-follow-link" href="{{ url_for('login', next=url_for('view_profile', user_id=user['id'])) }}">+ Follow</a>
+                {% elif is_self %}
+                    <a class="outline-link" href="{{ url_for('profile') }}">Edit profile</a>
+                {% endif %}
+            </div>
+        </section>
+        <section class="public-posts-section">
+            <h2>Posts</h2>
+            {% for post in posts %}
+                <article class="public-post-row">
+                    <p>{{ post['caption'] or '' }}</p>
+                    {% if post['media_path'] and post['media_type'] == 'image' %}
+                        <img class="public-post-media" src="{{ url_for('uploaded_file', filename=post['media_path']) }}" alt="Post image">
+                    {% elif post['media_path'] and post['media_type'] == 'video' %}
+                        <video class="public-post-media" controls src="{{ url_for('uploaded_file', filename=post['media_path']) }}"></video>
+                    {% endif %}
+                    <div class="profile-post-stats"><span>{{ post['like_count'] }} likes</span><span>{{ post['comment_count'] }} comments</span><span>{{ post['repost_count'] }} reposts</span></div>
+                </article>
+            {% else %}
+                <p class="muted">No posts yet.</p>
+            {% endfor %}
+            <h2>Reposts</h2>
+            {% for post in reposts %}
+                <article class="public-post-row">
+                    <p class="repost-byline">Reposted by @{{ user['username'] }} · Original post by <a href="{{ url_for('view_profile', user_id=post['user_id']) }}">@{{ post['username'] }}</a></p>
+                    <p>{{ post['caption'] or '' }}</p>
+                    {% if post['media_path'] and post['media_type'] == 'image' %}
+                        <img class="public-post-media" src="{{ url_for('uploaded_file', filename=post['media_path']) }}" alt="Reposted image">
+                    {% elif post['media_path'] and post['media_type'] == 'video' %}
+                        <video class="public-post-media" controls src="{{ url_for('uploaded_file', filename=post['media_path']) }}"></video>
+                    {% endif %}
+                    <div class="profile-post-stats"><span>{{ post['like_count'] }} likes</span><span>{{ post['comment_count'] }} comments</span><span>{{ post['repost_count'] }} reposts</span></div>
+                </article>
+            {% else %}
+                <p class="muted">No reposts yet.</p>
+            {% endfor %}
+        </section>
+    </main>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+</body>
+</html>

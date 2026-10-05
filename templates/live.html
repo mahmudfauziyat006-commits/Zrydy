@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Go Live | Zrydy</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
 <body class="social-body">
-    <nav class="topbar"><a class="brand" href="{{ url_for('dashboard') }}">zrydy</a><div class="nav-actions"><a href="{{ url_for('messages') }}">Inbox</a><a href="{{ url_for('dashboard') }}">Feed</a></div></nav>
+    <nav class="topbar"><a class="brand" href="{{ url_for('dashboard') }}">zrydy</a><div class="nav-actions"><a href="{{ url_for('messages') }}">Inbox</a><a href="{{ url_for('dashboard') }}">Feed</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button></div></nav>
     <main class="live-layout">
         <section class="live-panel">
             <h1>Go live</h1>
@@ -31,5 +31,6 @@
             else navigator.clipboard.writeText(location.href).then(() => alert('Live link copied.'));
         };
     </script>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
 </body>
 </html>

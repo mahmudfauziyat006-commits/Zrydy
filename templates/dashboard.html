@@ -10,9 +10,9 @@
     <meta name="description" content="Zrydy feed, profile, and app activity for social sharing.">
     <title>Zrydy Feed</title>
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
-<body class="social-body">
+<body class="social-body dark-mode">
     <nav class="topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
         <form class="search-form" action="{{ url_for('dashboard') }}" method="GET">
@@ -70,6 +70,35 @@
                 </form>
             </section>
 
+            <section class="stories-section" aria-label="Stories">
+                <div class="stories-heading"><h2>Stories</h2><span>Disappear after 24 hours</span></div>
+                <div class="stories-rail">
+                    {% if session.get('user_id') %}
+                        <form class="story-create" action="{{ url_for('create_story') }}" method="POST" enctype="multipart/form-data">
+                            <label class="story-add-avatar" for="story-media" aria-label="Add a story">+</label>
+                            <input id="story-media" class="hidden-input" type="file" name="media" accept="image/*,video/mp4,video/webm,video/quicktime">
+                            <input class="story-caption-input" type="text" name="caption" maxlength="500" placeholder="A quick story...">
+                            <button type="submit">Share</button>
+                        </form>
+                    {% else %}
+                        <a class="story-add-avatar" href="{{ url_for('login') }}" aria-label="Log in to add a story">+</a>
+                    {% endif %}
+                    {% for story in stories %}
+                        <button class="story-item {% if not story['viewed'] %}unviewed{% endif %}" type="button"
+                                data-story-id="{{ story['id'] }}" data-story-name="{{ story['full_name'] }}"
+                                data-story-handle="@{{ story['username'] }}" data-story-caption="{{ story['caption'] }}"
+                                data-story-type="{{ story['media_type'] }}"
+                                data-view-count="{{ story['view_count'] }}"
+                                data-story-src="{{ url_for('uploaded_file', filename=story['media_path']) if story['media_path'] else '' }}"
+                                data-story-view-url="{{ url_for('view_story', story_id=story['id']) if session.get('user_id') else '' }}">
+                            {% if story['profile_picture'] %}<img src="{{ url_for('uploaded_file', filename=story['profile_picture']) }}" alt="">{% else %}<span class="story-avatar-fallback">{{ story['full_name'][:1] }}</span>{% endif %}
+                            <span class="story-name">{{ story['username'] }}</span>
+                        </button>
+                    {% endfor %}
+                    {% if not stories %}<p class="stories-empty">Stories from your community appear here.</p>{% endif %}
+                </div>
+            </section>
+
             <div class="feed-heading">
                 <h1>{% if query %}Search results{% else %}Latest posts{% endif %}</h1>
                 <span>{{ posts|length }} posts</span>
@@ -78,20 +107,23 @@
                 <nav class="feed-tabs">
                     <a class="{% if feed_mode == 'for_you' %}active{% endif %}" href="{{ url_for('dashboard', feed='for_you') }}">For You</a>
                     <a class="{% if feed_mode == 'following' %}active{% endif %}" href="{{ url_for('dashboard', feed='following') }}">Following</a>
+                    <a class="{% if feed_mode == 'saved' %}active{% endif %}" href="{{ url_for('dashboard', feed='saved') }}">Saved</a>
                 </nav>
             {% endif %}
             {% if query %}
                 <section class="people-results">
                     <h2>People matching “{{ query }}”</h2>
                     {% for person in people %}
-                        <a class="person-row" href="{{ url_for('conversation', user_id=person['id']) }}">
-                            <span class="avatar">{{ person['full_name'][:1] }}</span>
-                            <span><strong>{{ person['full_name'] }}</strong><small>@{{ person['username'] }}</small></span>
+                        <div class="person-row">
+                            <a class="person-avatar-link" href="{{ url_for('view_profile', user_id=person['id']) }}">
+                                {% if person['profile_picture'] %}<img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=person['profile_picture']) }}" alt="{{ person['full_name'] }} profile picture">{% else %}<span class="avatar">{{ person['full_name'][:1] }}</span>{% endif %}
+                            </a>
+                            <a class="person-name-link" href="{{ url_for('view_profile', user_id=person['id']) }}"><strong>{{ person['full_name'] }}</strong><small>@{{ person['username'] }} · {{ person['follower_count'] }} followers</small></a>
                             <span class="person-actions">
                                 <form method="POST" action="{{ url_for('toggle_follow', user_id=person['id']) }}"><button type="submit">{{ 'Following' if person['following'] else 'Follow' }}</button></form>
                                 <form method="POST" action="{{ url_for('toggle_block', user_id=person['id']) }}"><button type="submit">{{ 'Unblock' if person['blocked'] else 'Block' }}</button></form>
                             </span>
-                        </a>
+                        </div>
                     {% else %}
                         <p class="muted">No people matched that search.</p>
                     {% endfor %}
@@ -100,44 +132,51 @@
             <p class="upload-note">Maximum video upload length: 10 minutes (up to 200 MB).</p>
 
             {% for post in posts %}
-                <article class="post-card">
-                    <header class="post-header">
-                        {% if post['profile_picture'] %}
-                            <img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=post['profile_picture']) }}" alt="{{ post['full_name'] }} profile picture">
-                        {% else %}
-                            <div class="avatar">{{ post['full_name'][:1] }}</div>
+                <article class="post-card" data-post-id="{{ post['id'] }}">
+                    <div class="post-main">
+                        <header class="post-header">
+                            <a class="post-avatar-link" href="{{ url_for('view_profile', user_id=post['user_id']) }}">
+                                {% if post['profile_picture'] %}<img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=post['profile_picture']) }}" alt="{{ post['full_name'] }} profile picture">{% else %}<span class="avatar">{{ post['full_name'][:1] }}</span>{% endif %}
+                            </a>
+                            <div class="post-author"><a href="{{ url_for('view_profile', user_id=post['user_id']) }}"><strong>{{ post['full_name'] }}</strong><span>@{{ post['username'] }}</span></a></div>
+                            {% if session.get('user_id') and session['user_id'] != post['user_id'] %}
+                                <form class="quick-follow" action="{{ url_for('toggle_follow', user_id=post['user_id']) }}" method="POST"><button type="submit" aria-label="{{ 'Unfollow' if post['following_author'] else 'Follow' }} @{{ post['username'] }}">{{ '✓' if post['following_author'] else '+' }}</button></form>
+                            {% endif %}
+                            <time>{{ post['created_at'] }}</time>
+                        </header>
+                        {% if post['caption'] %}<p class="post-caption">{{ post['caption'] }}</p>{% endif %}
+                        {% if post['media_path'] and post['media_type'] == 'image' %}
+                            <img class="post-media" src="{{ url_for('uploaded_file', filename=post['media_path']) }}" alt="Post image">
+                        {% elif post['media_path'] and post['media_type'] == 'video' %}
+                            <video class="post-media" controls><source src="{{ url_for('uploaded_file', filename=post['media_path']) }}"></video>
                         {% endif %}
-                        <div><strong>{{ post['full_name'] }}</strong><span>@{{ post['username'] }}</span></div>
-                        <time>{{ post['created_at'] }}</time>
-                    </header>
-                    {% if post['caption'] %}<p class="post-caption">{{ post['caption'] }}</p>{% endif %}
-                    {% if post['media_path'] and post['media_type'] == 'image' %}
-                        <img class="post-media" src="{{ url_for('uploaded_file', filename=post['media_path']) }}" alt="Post image">
-                    {% elif post['media_path'] and post['media_type'] == 'video' %}
-                        <video class="post-media" controls><source src="{{ url_for('uploaded_file', filename=post['media_path']) }}"></video>
-                    {% endif %}
-                    <details class="comments-panel" {% if post['comments'] %}open{% endif %}>
-                        <summary>View comments ({{ post['comment_count'] or 0 }})</summary>
-                        {% if post['comments'] %}
-                            <div class="comments-list">
-                                {% for comment in post['comments'] %}
-                                    <p><strong>{{ comment['full_name'] }}</strong>: {{ comment['body'] }}</p>
+                        <div class="post-summary"><span>{{ post['like_count'] or 0 }} likes</span><span>{{ post['comment_count'] or 0 }} comments</span><span>{{ post['repost_count'] or 0 }} reposts</span></div>
+                        <div class="reaction-summary" data-reaction-summary>
+                            {% for emoji, total in post['reaction_counts'].items() %}<span data-reaction-count="{{ emoji }}">{{ emoji }} {{ total }}</span>{% endfor %}
+                        </div>
+                        <details class="comments-panel" id="post-{{ post['id'] }}-comments" {% if post['comments'] %}open{% endif %}>
+                            <summary>Comments</summary>
+                            {% if post['comments'] %}<div class="comments-list">{% for comment in post['comments'] %}<p><strong>{{ comment['full_name'] }}</strong>: {{ comment['body'] }}</p>{% endfor %}</div>{% else %}<p class="muted">No comments yet.</p>{% endif %}
+                            <form action="{{ url_for('add_comment', post_id=post['id']) }}" method="POST"><input id="comment-{{ post['id'] }}" type="text" name="comment" placeholder="Write a comment or sticker" required><button class="comment-sticker-trigger" type="button" data-sticker-target="comment-{{ post['id'] }}" aria-label="Choose a sticker">Sticker</button><button type="submit">Comment</button></form>
+                        </details>
+                    </div>
+                    <aside class="post-actions" aria-label="Post actions">
+                        <div class="reaction-control">
+                            <button class="reaction-toggle {% if post['my_reaction'] %}selected{% endif %}" type="button" aria-expanded="false" aria-label="Choose reaction" data-reaction-toggle>
+                                <span data-current-reaction>{{ post['my_reaction'] or '＋' }}</span><small data-reaction-total>{{ post['reaction_total'] }} react{% if post['reaction_total'] != 1 %}ions{% else %}ion{% endif %}</small>
+                            </button>
+                            <div class="reaction-picker" hidden>
+                                {% for reaction in ['❤️', '😂', '😍', '🔥', '👏', '😮', '😢', '🎉'] %}
+                                    <button type="button" data-reaction="{{ reaction }}" aria-label="React {{ reaction }}">{{ reaction }}</button>
                                 {% endfor %}
                             </div>
-                        {% else %}
-                            <p class="muted">No comments yet. Be the first to comment.</p>
-                        {% endif %}
-                    </details>
-                    <div class="post-actions">
-                        <form action="{{ url_for('toggle_like', post_id=post['id']) }}" method="POST">
-                            <button type="submit">Like ({{ post['like_count'] or 0 }})</button>
-                        </form>
-                        <form action="{{ url_for('add_comment', post_id=post['id']) }}" method="POST">
-                            <input type="text" name="comment" placeholder="Write a comment" required>
-                            <button type="submit">Comment ({{ post['comment_count'] or 0 }})</button>
-                        </form>
-                        <button type="button" data-share-url="{{ request.url_root }}dashboard" onclick="sharePost(this.dataset.shareUrl, 'Check out this post on Zrydy')">Share</button>
-                    </div>
+                        </div>
+                        <form action="{{ url_for('toggle_like', post_id=post['id']) }}" method="POST"><button type="submit" aria-label="Like post"><span>♥</span><small>{{ post['like_count'] or 0 }}</small></button></form>
+                        <a href="#post-{{ post['id'] }}-comments" aria-label="View comments"><span>◌</span><small>{{ post['comment_count'] or 0 }}</small></a>
+                        <form action="{{ url_for('toggle_repost', post_id=post['id']) }}" method="POST"><button type="submit" aria-label="{{ 'Undo repost' if post['reposted_by_me'] else 'Repost' }}"><span>↻</span><small>{{ post['repost_count'] or 0 }}</small></button></form>
+                        <form action="{{ url_for('toggle_saved_post', post_id=post['id']) }}" method="POST"><button type="submit" aria-label="Save post"><span>▣</span><small>Save</small></button></form>
+                        <button type="button" aria-label="Share post" data-share-url="{{ request.url_root }}profile/{{ post['user_id'] }}" onclick="sharePost(this.dataset.shareUrl, 'Check out this post on Zrydy')"><span>↗</span><small>Share</small></button>
+                    </aside>
                 </article>
             {% else %}
                 <section class="empty-feed"><h2>Your feed is waiting</h2><p>Share your first photo, video, or thought above.</p></section>
@@ -152,6 +191,18 @@
             <a class="primary-link" href="{{ url_for('live') }}">Go live</a>
         </aside>
     </main>
+    <div class="story-viewer" id="story-viewer" role="dialog" aria-modal="true" aria-label="Story" aria-hidden="true" hidden>
+        <button class="story-close" type="button" aria-label="Close story">×</button>
+        <div class="story-viewer-card">
+            <div class="story-progress"><span></span></div>
+            <div class="story-viewer-author"><strong data-viewer-name></strong><small data-viewer-handle></small></div>
+            <img class="story-viewer-image" alt="Story" hidden>
+            <video class="story-viewer-video" playsinline controls hidden></video>
+            <p class="story-viewer-caption"></p>
+            <span class="story-view-count"></span>
+        </div>
+    </div>
+    <div class="social-toast" role="status" aria-live="polite"></div>
     <script>
         function validateVideoDuration(input) {
             const file = input.files && input.files[0];
@@ -171,18 +222,167 @@
         document.getElementById('camera').addEventListener('change', function () { validateVideoDuration(this); });
 
         const savedTheme = localStorage.getItem('zrydy-theme');
-        if (savedTheme === 'dark') document.body.classList.add('dark-mode');
+        const initialTheme = savedTheme === 'light' ? 'light' : 'dark';
+        document.body.classList.toggle('dark-mode', initialTheme === 'dark');
+        document.body.classList.toggle('light-mode', initialTheme === 'light');
+        document.getElementById('theme-toggle').textContent = initialTheme === 'dark' ? 'Light mode' : 'Dark mode';
         document.getElementById('theme-toggle').addEventListener('click', function () {
-            document.body.classList.toggle('dark-mode');
-            localStorage.setItem('zrydy-theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
-            this.textContent = document.body.classList.contains('dark-mode') ? 'Light mode' : 'Dark mode';
+            const nextTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+            document.body.classList.toggle('dark-mode', nextTheme === 'dark');
+            document.body.classList.toggle('light-mode', nextTheme === 'light');
+            localStorage.setItem('zrydy-theme', nextTheme);
+            this.textContent = nextTheme === 'dark' ? 'Light mode' : 'Dark mode';
         });
         document.querySelectorAll('[data-emoji-target]').forEach(button => button.addEventListener('click', function () {
             document.getElementById(this.dataset.emojiTarget).value += ' 😊 ❤️ 😂 🔥 🙌';
         }));
-        document.querySelectorAll('[data-sticker-target]').forEach(button => button.addEventListener('click', function () {
-            document.getElementById(this.dataset.stickerTarget).value += ' [sticker: 🎉]';
+        const toast = document.querySelector('.social-toast');
+        let toastTimer;
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('visible');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('visible'), 2300);
+        }
+
+        function floatReaction(card, emoji, button) {
+            const cardRect = card.getBoundingClientRect();
+            const buttonRect = button.getBoundingClientRect();
+            const floater = document.createElement('span');
+            floater.className = 'floating-reaction';
+            floater.textContent = emoji;
+            floater.style.left = `${buttonRect.left - cardRect.left + buttonRect.width / 2}px`;
+            floater.style.top = `${buttonRect.top - cardRect.top}px`;
+            card.appendChild(floater);
+            floater.addEventListener('animationend', () => floater.remove(), {once: true});
+        }
+
+        function renderReactionCounts(card, counts) {
+            const summary = card.querySelector('[data-reaction-summary]');
+            summary.replaceChildren();
+            Object.entries(counts).forEach(([emoji, count]) => {
+                const item = document.createElement('span');
+                item.dataset.reactionCount = emoji;
+                item.textContent = `${emoji} ${count}`;
+                summary.appendChild(item);
+            });
+        }
+
+        document.querySelectorAll('[data-reaction-toggle]').forEach(toggle => {
+            const picker = toggle.nextElementSibling;
+            toggle.addEventListener('click', () => {
+                picker.hidden = !picker.hidden;
+                toggle.setAttribute('aria-expanded', String(!picker.hidden));
+            });
+            picker.querySelectorAll('[data-reaction]').forEach(option => option.addEventListener('click', async () => {
+                const card = toggle.closest('.post-card');
+                try {
+                    const response = await fetch(`/post/${card.dataset.postId}/react`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+                        body: JSON.stringify({reaction: option.dataset.reaction})
+                    });
+                    if (response.redirected) {
+                        showToast('Log in to react to posts.');
+                        return;
+                    }
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || 'Could not save reaction.');
+                    const current = toggle.querySelector('[data-current-reaction]');
+                    current.textContent = result.reaction || '＋';
+                    toggle.classList.toggle('selected', Boolean(result.reaction));
+                    const total = toggle.querySelector('[data-reaction-total]');
+                    total.textContent = `${result.total} ${result.total === 1 ? 'reaction' : 'reactions'}`;
+                    renderReactionCounts(card, result.counts);
+                    if (result.reaction) floatReaction(card, result.reaction, toggle);
+                    picker.hidden = true;
+                    toggle.setAttribute('aria-expanded', 'false');
+                } catch (error) {
+                    showToast(error.message);
+                }
+            }));
+        });
+
+        document.querySelectorAll('[data-sticker-target]').forEach(trigger => {
+            const stickers = ['😂', '❤️', '🔥', '🎉', '😎', '🥹', '✨', '👏'];
+            const picker = document.createElement('div');
+            picker.className = 'sticker-picker';
+            picker.hidden = true;
+            stickers.forEach(sticker => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.textContent = sticker;
+                option.setAttribute('aria-label', `Insert ${sticker} sticker`);
+                option.addEventListener('click', () => {
+                    const target = document.getElementById(trigger.dataset.stickerTarget);
+                    if (target) {
+                        target.value += `${target.value ? ' ' : ''}${sticker}`;
+                        target.dispatchEvent(new Event('input', {bubbles: true}));
+                        target.focus();
+                    }
+                    picker.hidden = true;
+                });
+                picker.appendChild(option);
+            });
+            trigger.insertAdjacentElement('afterend', picker);
+            trigger.addEventListener('click', () => { picker.hidden = !picker.hidden; });
+        });
+
+        const storyViewer = document.getElementById('story-viewer');
+        let storyTimer;
+        function closeStoryViewer() {
+            clearTimeout(storyTimer);
+            storyViewer.hidden = true;
+            storyViewer.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('story-open');
+            const video = storyViewer.querySelector('.story-viewer-video');
+            video.pause();
+            video.removeAttribute('src');
+            video.hidden = true;
+            storyViewer.querySelector('.story-viewer-image').hidden = true;
+        }
+        document.querySelectorAll('[data-story-id]').forEach(story => story.addEventListener('click', async () => {
+            storyViewer.hidden = false;
+            storyViewer.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('story-open');
+            storyViewer.querySelector('[data-viewer-name]').textContent = story.dataset.storyName;
+            storyViewer.querySelector('[data-viewer-handle]').textContent = story.dataset.storyHandle;
+            storyViewer.querySelector('.story-viewer-caption').textContent = story.dataset.storyCaption;
+            const image = storyViewer.querySelector('.story-viewer-image');
+            const video = storyViewer.querySelector('.story-viewer-video');
+            if (story.dataset.storyType === 'image' && story.dataset.storySrc) {
+                image.src = story.dataset.storySrc;
+                image.hidden = false;
+            } else if (story.dataset.storyType === 'video' && story.dataset.storySrc) {
+                video.src = story.dataset.storySrc;
+                video.hidden = false;
+                video.play().catch(() => {});
+            }
+            const count = storyViewer.querySelector('.story-view-count');
+            count.textContent = `${story.dataset.viewCount || '0'} views`;
+            if (story.dataset.storyViewUrl) {
+                try {
+                    const response = await fetch(story.dataset.storyViewUrl, {method: 'POST'});
+                    if (response.ok) {
+                        const result = await response.json();
+                        count.textContent = `${result.viewCount} views`;
+                        story.classList.remove('unviewed');
+                    }
+                } catch (_) {}
+            }
+            clearTimeout(storyTimer);
+            storyTimer = setTimeout(closeStoryViewer, 7000);
         }));
+        storyViewer.querySelector('.story-close').addEventListener('click', closeStoryViewer);
+        storyViewer.addEventListener('click', event => { if (event.target === storyViewer) closeStoryViewer(); });
+        document.addEventListener('keydown', event => { if (event.key === 'Escape' && !storyViewer.hidden) closeStoryViewer(); });
+        document.querySelector('.story-create')?.addEventListener('submit', event => {
+            const input = document.getElementById('story-media');
+            if (!input.files.length && !event.currentTarget.querySelector('[name="caption"]').value.trim()) {
+                event.preventDefault();
+                showToast('Add a photo, video, or short note first.');
+            }
+        });
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
         let lastNotificationCount = {{ unread_message_count }};
         setInterval(function () {

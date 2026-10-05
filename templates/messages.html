@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Messages | Zrydy</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
 <body class="social-body">
     <nav class="topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
-        <div class="nav-actions"><a href="{{ url_for('dashboard') }}">Feed</a><a href="{{ url_for('profile') }}">Profile</a><a href="{{ url_for('logout') }}">Log out</a></div>
+        <div class="nav-actions"><a href="{{ url_for('dashboard') }}">Feed</a><a href="{{ url_for('profile') }}">Profile</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button><a href="{{ url_for('logout') }}">Log out</a></div>
     </nav>
     <main class="messages-layout">
         <section class="message-panel">
@@ -71,5 +71,6 @@
             {% endfor %}
         </section>
     </main>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
 </body>
 </html>

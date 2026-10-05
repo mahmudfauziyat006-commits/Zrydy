@@ -1,7 +1,11 @@
 import os
+import json
+import secrets
 import sqlite3
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Flask, flash, g, jsonify, redirect, render_template, render_template_string, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -58,6 +62,18 @@ def get_db():
     return db
 
 
+def fetch_scalar(query, params=()):
+    row = get_db().execute(query, params).fetchone()
+    if row is None:
+        return None
+    try:
+        return row[0]
+    except (KeyError, IndexError, TypeError):
+        if hasattr(row, 'values'):
+            return next(iter(row.values()))
+        return next(iter(row))
+
+
 @app.teardown_appcontext
 def close_db(_exception):
     db = getattr(g, '_database', None)
@@ -80,6 +96,11 @@ def init_postgres_db():
         '''CREATE TABLE IF NOT EXISTS likes (
             id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
             post_id INTEGER NOT NULL REFERENCES posts(id), UNIQUE(user_id, post_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS post_reactions (
+            user_id INTEGER NOT NULL REFERENCES users(id), post_id INTEGER NOT NULL REFERENCES posts(id),
+            reaction TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(user_id, post_id)
         )''',
         '''CREATE TABLE IF NOT EXISTS comments (
             id SERIAL PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id),
@@ -112,6 +133,32 @@ def init_postgres_db():
         '''CREATE TABLE IF NOT EXISTS blocks (
             blocker_id INTEGER NOT NULL REFERENCES users(id), blocked_id INTEGER NOT NULL REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(blocker_id, blocked_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS saved_posts (
+            user_id INTEGER NOT NULL REFERENCES users(id), post_id INTEGER NOT NULL REFERENCES posts(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id, post_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS reposts (
+            user_id INTEGER NOT NULL REFERENCES users(id), post_id INTEGER NOT NULL REFERENCES posts(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id, post_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS stories (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), caption TEXT DEFAULT '',
+            media_path TEXT DEFAULT '', media_type TEXT DEFAULT 'text',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TEXT NOT NULL
+        )''',
+        '''CREATE TABLE IF NOT EXISTS story_views (
+            story_id INTEGER NOT NULL REFERENCES stories(id), user_id INTEGER NOT NULL REFERENCES users(id),
+            viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(story_id, user_id)
+        )''',
+        '''CREATE TABLE IF NOT EXISTS polls (
+            id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), question TEXT NOT NULL,
+            options TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''',
+        '''CREATE TABLE IF NOT EXISTS poll_votes (
+            poll_id INTEGER NOT NULL REFERENCES polls(id), user_id INTEGER NOT NULL REFERENCES users(id),
+            option_index INTEGER NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(poll_id, user_id)
         )''',
         '''CREATE TABLE IF NOT EXISTS notifications (
             id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), actor_id INTEGER REFERENCES users(id),
@@ -180,6 +227,11 @@ def init_db():
             )
             '''
         )
+        db.execute('''CREATE TABLE IF NOT EXISTS post_reactions (
+            user_id INTEGER NOT NULL, post_id INTEGER NOT NULL, reaction TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id, post_id),
+            FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(post_id) REFERENCES posts(id)
+        )''')
         db.execute(
             '''
             CREATE TABLE IF NOT EXISTS comments (
@@ -259,6 +311,41 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY(blocker_id, blocked_id)
         )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS saved_posts (
+            user_id INTEGER NOT NULL, post_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(user_id, post_id),
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(post_id) REFERENCES posts(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS reposts (
+            user_id INTEGER NOT NULL, post_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(user_id, post_id),
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(post_id) REFERENCES posts(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS stories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, caption TEXT DEFAULT '',
+            media_path TEXT DEFAULT '', media_type TEXT DEFAULT 'text',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS story_views (
+            story_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(story_id, user_id),
+            FOREIGN KEY(story_id) REFERENCES stories(id), FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS polls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, question TEXT NOT NULL,
+            options TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS poll_votes (
+            poll_id INTEGER NOT NULL, user_id INTEGER NOT NULL, option_index INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(poll_id, user_id),
+            FOREIGN KEY(poll_id) REFERENCES polls(id), FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
         db.execute('''CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, actor_id INTEGER,
             kind TEXT NOT NULL, body TEXT NOT NULL, target_url TEXT DEFAULT '',
@@ -298,19 +385,19 @@ def get_all_users():
 def get_unread_message_count():
     if 'user_id' not in session:
         return 0
-    return get_db().execute(
-        'SELECT COUNT(*) FROM messages WHERE recipient_id = ? AND is_read = 0',
+    return fetch_scalar(
+        'SELECT COUNT(*) AS total FROM messages WHERE recipient_id = ? AND is_read = 0',
         (session['user_id'],),
-    ).fetchone()[0]
+    ) or 0
 
 
 def get_unread_notification_count():
     if 'user_id' not in session:
         return 0
-    return get_db().execute(
-        'SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0',
+    return fetch_scalar(
+        'SELECT COUNT(*) AS total FROM notifications WHERE user_id = ? AND is_read = 0',
         (session['user_id'],),
-    ).fetchone()[0]
+    ) or 0
 
 
 def notify(user_id, actor_id, kind, body, target_url=''):
@@ -335,10 +422,13 @@ def get_feed_posts(query='', feed_mode='for_you'):
     search = f'%{query.strip()}%'
     user_id = session.get('user_id', 0)
     following_clause = "" if feed_mode != 'following' else 'AND (p.user_id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followed_id = p.user_id))'
+    saved_clause = 'AND EXISTS (SELECT 1 FROM saved_posts s WHERE s.user_id = ? AND s.post_id = p.id)' if feed_mode == 'saved' else ''
     blocked_clause = 'AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ? AND b.blocked_id = p.user_id)'
     parameters = [query.strip(), search, search, search]
     if feed_mode == 'following':
         parameters.extend([user_id, user_id])
+    if feed_mode == 'saved':
+        parameters.append(user_id)
     parameters.append(user_id)
     rows = db.execute(
         '''
@@ -347,24 +437,44 @@ def get_feed_posts(query='', feed_mode='for_you'):
                u.full_name,
                u.profile_picture,
                (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
-               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count,
+               (SELECT COUNT(*) FROM reposts r WHERE r.post_id = p.id) AS repost_count
         FROM posts p
         JOIN users u ON u.id = p.user_id
         WHERE (? = '' OR p.caption LIKE ? OR u.username LIKE ? OR u.full_name LIKE ?)
         {following_clause}
+        {saved_clause}
         {blocked_clause}
         ORDER BY p.created_at DESC
-        '''.format(following_clause=following_clause, blocked_clause=blocked_clause),
+        '''.format(following_clause=following_clause, saved_clause=saved_clause, blocked_clause=blocked_clause),
         parameters,
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_active_stories():
+        db = get_db()
+        current_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        viewer_id = session.get('user_id', 0)
+        rows = db.execute(
+                '''SELECT s.*, u.username, u.full_name, u.profile_picture,
+                                    (SELECT COUNT(*) FROM story_views sv WHERE sv.story_id = s.id) AS view_count,
+                                    EXISTS(SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.user_id = ?) AS viewed
+                     FROM stories s JOIN users u ON u.id = s.user_id
+                     WHERE s.expires_at > ?
+                         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ? AND b.blocked_id = s.user_id)
+                     ORDER BY s.created_at DESC LIMIT 40''',
+                (viewer_id, current_time, viewer_id),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
 
 def search_users(query):
     search = f'%{query.strip()}%'
     return get_db().execute(
         '''
-        SELECT id, full_name, username, bio, profile_picture
+         SELECT id, full_name, username, bio, profile_picture,
+             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = users.id) AS follower_count
         FROM users
                 WHERE id != ?
                     AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ? AND b.blocked_id = users.id)
@@ -442,6 +552,15 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/health')
+def health():
+    try:
+        fetch_scalar('SELECT 1')
+    except Exception:
+        return jsonify({'status': 'unhealthy'}), 503
+    return jsonify({'status': 'ok'}), 200
+
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -469,7 +588,7 @@ def signup():
             return render_template('index.html')
 
         db = get_db()
-        is_admin = db.execute('SELECT COUNT(*) FROM users').fetchone()[0] == 0
+        is_admin = fetch_scalar('SELECT COUNT(*) AS total FROM users') == 0
         db.execute(
             'INSERT INTO users (full_name, username, email, password_hash, bio, profile_picture, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (full_name, username, email, generate_password_hash(password), 'New to Zrydy', '', 1 if is_admin else 0),
@@ -500,6 +619,10 @@ def login():
             session['username'] = user['username']
             session['is_admin'] = bool(user['is_admin'])
             flash('Login successful!', 'success')
+            next_url = request.args.get('next', '')
+            parsed_next = urlsplit(next_url)
+            if parsed_next.path.startswith('/') and not parsed_next.path.startswith('//') and not parsed_next.netloc and not parsed_next.scheme:
+                return redirect(next_url)
             return redirect(url_for('dashboard'))
 
         flash('Invalid username or password.', 'error')
@@ -553,11 +676,30 @@ def dashboard():
         }
     query = request.args.get('q', '').strip()
     feed_mode = request.args.get('feed', 'for_you')
-    if feed_mode not in {'for_you', 'following'}:
+    if feed_mode not in {'for_you', 'following', 'saved'}:
         feed_mode = 'for_you'
     posts = get_feed_posts(query, feed_mode)
     for post in posts:
         post['comments'] = get_comments_for_post(post['id'])
+        reaction_rows = get_db().execute(
+            'SELECT reaction, COUNT(*) AS total FROM post_reactions WHERE post_id = ? GROUP BY reaction',
+            (post['id'],),
+        ).fetchall()
+        post['reaction_counts'] = {row['reaction']: row['total'] for row in reaction_rows}
+        post['reaction_total'] = sum(post['reaction_counts'].values())
+        my_reaction = get_db().execute(
+            'SELECT reaction FROM post_reactions WHERE user_id = ? AND post_id = ?',
+            (session.get('user_id', 0), post['id']),
+        ).fetchone() if 'user_id' in session else None
+        post['my_reaction'] = my_reaction['reaction'] if my_reaction else ''
+        post['following_author'] = bool('user_id' in session and get_db().execute(
+            'SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?',
+            (session['user_id'], post['user_id']),
+        ).fetchone())
+        post['reposted_by_me'] = bool(get_db().execute(
+            'SELECT 1 FROM reposts WHERE user_id = ? AND post_id = ?',
+            (session.get('user_id', 0), post['id']),
+        ).fetchone()) if 'user_id' in session else False
     people = search_users(query) if 'user_id' in session else []
     if 'user_id' in session:
         db = get_db()
@@ -565,13 +707,110 @@ def dashboard():
         for person in people:
             person['following'] = bool(db.execute('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?', (session['user_id'], person['id'])).fetchone())
             person['blocked'] = bool(db.execute('SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?', (session['user_id'], person['id'])).fetchone())
-    return render_template('dashboard.html', user=user, posts=posts, people=people, query=query, feed_mode=feed_mode)
+    return render_template(
+        'dashboard.html', user=user, posts=posts, people=people, query=query,
+        feed_mode=feed_mode, stories=get_active_stories(),
+    )
+
+
+@app.route('/stories/create', methods=['POST'])
+@login_required
+def create_story():
+    caption = request.form.get('caption', '').strip()[:500]
+    media = request.files.get('media')
+    media_path = ''
+    media_type = 'text'
+    if media and media.filename:
+        safe_name = secure_filename(media.filename)
+        suffix = Path(safe_name).suffix.lower()
+        media_type = 'image' if suffix in {'.png', '.jpg', '.jpeg', '.gif', '.webp'} else 'video' if suffix in {'.mp4', '.mov', '.webm'} else ''
+        if not media_type:
+            flash('Stories support images and videos only.', 'error')
+            return redirect(url_for('dashboard'))
+        media_path = f"{secrets.token_hex(8)}_{safe_name}"
+        media.save(UPLOAD_FOLDER / media_path)
+    if not caption and not media_path:
+        flash('Add a photo, video, or short note to your story.', 'error')
+        return redirect(url_for('dashboard'))
+    expires_at = (datetime.utcnow() + timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+    db = get_db()
+    db.execute(
+        'INSERT INTO stories (user_id, caption, media_path, media_type, expires_at) VALUES (?, ?, ?, ?, ?)',
+        (session['user_id'], caption, media_path, media_type, expires_at),
+    )
+    db.commit()
+    flash('Your story is live for 24 hours.', 'success')
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/stories/<int:story_id>/view', methods=['POST'])
+@login_required
+def view_story(story_id):
+    db = get_db()
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    story = db.execute(
+        'SELECT id, user_id FROM stories WHERE id = ? AND expires_at > ?',
+        (story_id, now),
+    ).fetchone()
+    if story is None:
+        return jsonify({'error': 'Story is no longer available.'}), 404
+    existing = db.execute(
+        'SELECT 1 FROM story_views WHERE story_id = ? AND user_id = ?',
+        (story_id, session['user_id']),
+    ).fetchone()
+    if not existing:
+        db.execute('INSERT INTO story_views (story_id, user_id) VALUES (?, ?)', (story_id, session['user_id']))
+        db.commit()
+    count = fetch_scalar('SELECT COUNT(*) FROM story_views WHERE story_id = ?', (story_id,)) or 0
+    return jsonify({'viewed': True, 'viewCount': count})
 
 
 @app.route('/live')
 @login_required
 def live():
     return render_template('live.html')
+
+
+@app.route('/profile/<int:user_id>')
+def view_profile(user_id):
+    db = get_db()
+    user = get_user_by_id(user_id)
+    if user is None:
+        return 'Profile not found.', 404
+    if 'user_id' in session and db.execute(
+        'SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)',
+        (session['user_id'], user_id, user_id, session['user_id']),
+    ).fetchone():
+        return 'Profile not found.', 404
+    user = dict(user)
+    user['follower_count'] = fetch_scalar('SELECT COUNT(*) FROM follows WHERE followed_id = ?', (user_id,)) or 0
+    user['following_count'] = fetch_scalar('SELECT COUNT(*) FROM follows WHERE follower_id = ?', (user_id,)) or 0
+    user['post_count'] = fetch_scalar('SELECT COUNT(*) FROM posts WHERE user_id = ?', (user_id,)) or 0
+    user['like_count'] = fetch_scalar(
+        'SELECT COUNT(*) FROM likes WHERE post_id IN (SELECT id FROM posts WHERE user_id = ?)',
+        (user_id,),
+    ) or 0
+    user['following'] = bool('user_id' in session and db.execute(
+        'SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?', (session['user_id'], user_id),
+    ).fetchone())
+    posts = db.execute(
+        '''SELECT p.*, (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
+                  (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count,
+                  (SELECT COUNT(*) FROM reposts r WHERE r.post_id = p.id) AS repost_count
+           FROM posts p WHERE p.user_id = ? ORDER BY p.created_at DESC''',
+        (user_id,),
+    ).fetchall()
+    reposts = db.execute(
+        '''SELECT p.*, u.username, u.full_name, u.profile_picture,
+                  (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
+                  (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count,
+                  (SELECT COUNT(*) FROM reposts r2 WHERE r2.post_id = p.id) AS repost_count
+           FROM reposts r JOIN posts p ON p.id = r.post_id JOIN users u ON u.id = p.user_id
+           WHERE r.user_id = ? ORDER BY r.created_at DESC''',
+        (user_id,),
+    ).fetchall()
+    is_self = 'user_id' in session and session['user_id'] == user_id
+    return render_template('public_profile.html', user=user, posts=posts, reposts=reposts, is_self=is_self)
 
 
 @app.route('/user/<int:user_id>/follow', methods=['POST'])
@@ -804,6 +1043,47 @@ def toggle_like(post_id):
     return redirect(url_for('dashboard'))
 
 
+@app.route('/post/<int:post_id>/react', methods=['POST'])
+@login_required
+def react_to_post(post_id):
+    allowed_reactions = {'❤️', '😂', '😍', '🔥', '👏', '😮', '😢', '🎉'}
+    reaction = (request.get_json(silent=True) or {}).get('reaction', '')
+    if reaction not in allowed_reactions:
+        return jsonify({'error': 'Choose a supported reaction.'}), 400
+    db = get_db()
+    post = db.execute('SELECT user_id FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if post is None:
+        return jsonify({'error': 'Post not found.'}), 404
+    existing = db.execute(
+        'SELECT reaction FROM post_reactions WHERE user_id = ? AND post_id = ?',
+        (session['user_id'], post_id),
+    ).fetchone()
+    selected = ''
+    if existing and existing['reaction'] == reaction:
+        db.execute('DELETE FROM post_reactions WHERE user_id = ? AND post_id = ?', (session['user_id'], post_id))
+    elif existing:
+        db.execute(
+            'UPDATE post_reactions SET reaction = ?, created_at = CURRENT_TIMESTAMP WHERE user_id = ? AND post_id = ?',
+            (reaction, session['user_id'], post_id),
+        )
+        selected = reaction
+    else:
+        db.execute(
+            'INSERT INTO post_reactions (user_id, post_id, reaction) VALUES (?, ?, ?)',
+            (session['user_id'], post_id, reaction),
+        )
+        selected = reaction
+    if selected:
+        notify(post['user_id'], session['user_id'], 'reaction', f"{session.get('username', 'Someone')} reacted {reaction} to your post.", url_for('dashboard'))
+    db.commit()
+    rows = db.execute(
+        'SELECT reaction, COUNT(*) AS total FROM post_reactions WHERE post_id = ? GROUP BY reaction',
+        (post_id,),
+    ).fetchall()
+    counts = {row['reaction']: row['total'] for row in rows}
+    return jsonify({'reaction': selected, 'counts': counts, 'total': sum(counts.values())})
+
+
 @app.route('/post/<int:post_id>/comment', methods=['POST'])
 @login_required
 def add_comment(post_id):
@@ -819,6 +1099,47 @@ def add_comment(post_id):
     else:
         flash('Please write a comment before posting.', 'error')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/post/<int:post_id>/save', methods=['POST'])
+@login_required
+def toggle_saved_post(post_id):
+    db = get_db()
+    existing = db.execute(
+        'SELECT 1 FROM saved_posts WHERE user_id = ? AND post_id = ?',
+        (session['user_id'], post_id),
+    ).fetchone()
+    if existing:
+        db.execute('DELETE FROM saved_posts WHERE user_id = ? AND post_id = ?', (session['user_id'], post_id))
+        flash('Post removed from saved posts.', 'success')
+    else:
+        db.execute('INSERT INTO saved_posts (user_id, post_id) VALUES (?, ?)', (session['user_id'], post_id))
+        flash('Post saved.', 'success')
+    db.commit()
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/post/<int:post_id>/repost', methods=['POST'])
+@login_required
+def toggle_repost(post_id):
+    db = get_db()
+    post = db.execute('SELECT id, user_id FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if post is None:
+        flash('Post not found.', 'error')
+        return redirect(request.referrer or url_for('dashboard'))
+    existing = db.execute(
+        'SELECT 1 FROM reposts WHERE user_id = ? AND post_id = ?',
+        (session['user_id'], post_id),
+    ).fetchone()
+    if existing:
+        db.execute('DELETE FROM reposts WHERE user_id = ? AND post_id = ?', (session['user_id'], post_id))
+        flash('Repost removed.', 'success')
+    else:
+        db.execute('INSERT INTO reposts (user_id, post_id) VALUES (?, ?)', (session['user_id'], post_id))
+        notify(post['user_id'], session['user_id'], 'repost', f"{session.get('username', 'Someone')} reposted your post.", url_for('dashboard'))
+        flash('Post reposted.', 'success')
+    db.commit()
+    return redirect(request.referrer or url_for('dashboard'))
 
 
 @app.route('/create-post', methods=['GET', 'POST'])
