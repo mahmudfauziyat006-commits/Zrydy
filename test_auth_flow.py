@@ -1,4 +1,5 @@
 import io
+import re
 
 import pytest
 
@@ -32,7 +33,7 @@ def test_signup_and_login_flow(client):
     assert signup.status_code == 200
     assert b'dashboard' in signup.data.lower()
 
-    client.get('/logout')
+    client.post('/logout')
 
     login = client.post(
         '/login',
@@ -59,7 +60,7 @@ def test_logout_then_login_accepts_username_case(client):
         },
         follow_redirects=True,
     )
-    logout = client.get('/logout')
+    logout = client.post('/logout')
     assert logout.status_code == 302
 
     login = client.post(
@@ -81,12 +82,17 @@ def test_stale_session_redirects_to_login_instead_of_server_error(client):
     assert b'session expired' in response.data.lower()
 
 
-def test_admin_can_view_users(client):
+def test_admin_can_view_users_only_after_explicit_bootstrap(client, monkeypatch):
+    monkeypatch.setenv('BOOTSTRAP_ADMIN_USERNAME', 'secureadmin')
+    monkeypatch.setenv('BOOTSTRAP_ADMIN_EMAIL', 'secureadmin@example.com')
+    monkeypatch.setenv('BOOTSTRAP_ADMIN_PASSWORD', 'test-only-bootstrap-password-2026')
+    from app import init_db
+    init_db()
     login = client.post(
         '/login',
         data={
-            'username': 'admin',
-            'password': 'admin123',
+            'username': 'secureadmin',
+            'password': 'test-only-bootstrap-password-2026',
         },
         follow_redirects=True,
     )
@@ -98,14 +104,13 @@ def test_admin_can_view_users(client):
 
 
 def test_profile_page_shows_user_data(client):
-    client.post(
-        '/login',
-        data={
-            'username': 'admin',
-            'password': 'admin123',
-        },
-        follow_redirects=True,
-    )
+    client.post('/signup', data={
+        'full_name': 'Profile User',
+        'username': 'profileuser',
+        'email': 'profile@example.com',
+        'password': 'profilepass123',
+        'confirm_password': 'profilepass123',
+    }, follow_redirects=True)
 
     response = client.get('/profile')
     assert response.status_code == 200
@@ -113,7 +118,7 @@ def test_profile_page_shows_user_data(client):
     assert b'admin' in response.data.lower()
 
 
-def test_forgot_password_updates_password(client):
+def test_forgot_password_cannot_reset_password_by_username(client):
     client.post(
         '/signup',
         data={
@@ -137,22 +142,72 @@ def test_forgot_password_updates_password(client):
     )
 
     assert reset.status_code == 200
-    assert b'Password updated successfully' in reset.data
+    assert b'verified email' in reset.data.lower()
 
-    logout = client.get('/logout')
+    logout = client.post('/logout')
     assert logout.status_code == 302
 
     login = client.post(
         '/login',
         data={
             'username': 'resetuser',
-            'password': 'newpass123',
+            'password': 'oldpass',
         },
         follow_redirects=True,
     )
 
     assert login.status_code == 200
     assert b'dashboard' in login.data.lower()
+
+
+def test_password_change_requires_current_password(client):
+    client.post('/signup', data={
+        'full_name': 'Password User',
+        'username': 'passworduser',
+        'email': 'password@example.com',
+        'password': 'old-password-123',
+        'confirm_password': 'old-password-123',
+    })
+    rejected = client.post('/change-password', data={
+        'current_password': 'wrong-password',
+        'new_password': 'new-password-1234',
+        'confirm_password': 'new-password-1234',
+    }, follow_redirects=True)
+    assert b'Current password is incorrect.' in rejected.data
+
+    changed = client.post('/change-password', data={
+        'current_password': 'old-password-123',
+        'new_password': 'new-password-1234',
+        'confirm_password': 'new-password-1234',
+    }, follow_redirects=True)
+    assert b'Password changed successfully.' in changed.data
+
+    client.post('/logout')
+    login = client.post('/login', data={
+        'username': 'passworduser',
+        'password': 'new-password-1234',
+    }, follow_redirects=True)
+    assert login.status_code == 200
+    assert b'dashboard' in login.data.lower()
+
+
+def test_csrf_rejects_missing_tokens_and_accepts_valid_form_token(client):
+    login_page = client.get('/login')
+    match = re.search(rb'name="csrf_token" value="([^"]+)"', login_page.data)
+    assert match
+    token = match.group(1).decode()
+    app.config['TESTING'] = False
+    try:
+        rejected = client.post('/login', data={'username': 'missing', 'password': 'wrong'})
+        accepted = client.post('/login', data={
+            'username': 'missing',
+            'password': 'wrong',
+            'csrf_token': token,
+        })
+        assert rejected.status_code == 400
+        assert accepted.status_code == 200
+    finally:
+        app.config['TESTING'] = True
 
 
 def test_user_can_create_post_in_feed(client):

@@ -28,7 +28,7 @@ def signup(client, full_name, username, email):
 def test_search_finds_people_and_posts(client):
     signup(client, 'Jane Doe', 'janedoe', 'jane@example.com')
     client.post('/create-post', data={'caption': 'Jane community post'}, follow_redirects=True)
-    client.get('/logout')
+    client.post('/logout')
     signup(client, 'John Smith', 'johnsmith', 'john@example.com')
 
     response = client.get('/dashboard?q=Jane')
@@ -40,7 +40,7 @@ def test_search_finds_people_and_posts(client):
 
 def test_user_can_create_and_use_group_chat(client):
     signup(client, 'Owner User', 'owner', 'owner@example.com')
-    client.get('/logout')
+    client.post('/logout')
     signup(client, 'Member User', 'member', 'member@example.com')
 
     messages = client.get('/messages')
@@ -78,9 +78,9 @@ def test_profile_picture_is_saved_and_rendered(client):
 
 def test_unread_notification_and_media_message(client):
     signup(client, 'Sender User', 'sender', 'sender@example.com')
-    client.get('/logout')
+    client.post('/logout')
     signup(client, 'Receiver User', 'receiver', 'receiver@example.com')
-    client.get('/logout')
+    client.post('/logout')
     client.post('/login', data={'username': 'sender', 'password': 'secret123'})
 
     response = client.post(
@@ -91,7 +91,7 @@ def test_unread_notification_and_media_message(client):
     )
     assert response.status_code == 200
 
-    client.get('/logout')
+    client.post('/logout')
     client.post('/login', data={'username': 'receiver', 'password': 'secret123'})
     notification = client.get('/notifications')
     assert notification.status_code == 200
@@ -104,18 +104,18 @@ def test_unread_notification_and_media_message(client):
 def test_follow_notification_feed_modes_and_block(client):
     signup(client, 'Creator User', 'creator', 'creator@example.com')
     client.post('/create-post', data={'caption': 'Creator only post'}, follow_redirects=True)
-    client.get('/logout')
+    client.post('/logout')
     signup(client, 'Follower User', 'follower', 'follower@example.com')
 
     follow = client.post('/user/2/follow', follow_redirects=True)
     assert follow.status_code == 200
-    client.get('/logout')
+    client.post('/logout')
     client.post('/login', data={'username': 'creator', 'password': 'secret123'})
     alerts = client.get('/notifications').json
     assert alerts['count'] == 1
     assert 'following' in alerts['notifications'][0]['body']
 
-    client.get('/logout')
+    client.post('/logout')
     client.post('/login', data={'username': 'follower', 'password': 'secret123'})
     following = client.get('/dashboard?feed=following')
     assert b'Creator only post' in following.data
@@ -128,7 +128,7 @@ def test_follow_notification_feed_modes_and_block(client):
 
 def test_conversation_can_be_deleted(client):
     signup(client, 'First User', 'first', 'first@example.com')
-    client.get('/logout')
+    client.post('/logout')
     signup(client, 'Second User', 'second', 'second@example.com')
     client.post('/messages/2', data={'body': 'Remove this chat'}, follow_redirects=True)
     deleted = client.post('/messages/2/delete', follow_redirects=True)

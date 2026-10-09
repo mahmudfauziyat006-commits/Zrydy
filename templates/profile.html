@@ -33,6 +33,7 @@
         <p><strong>Bio:</strong> {{ user['bio'] or 'No bio yet' }}</p>
 
         <form method="POST" action="{{ url_for('profile') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label for="full_name">Full Name</label>
             <input type="text" id="full_name" name="full_name" value="{{ user['full_name'] }}" required>
 
@@ -53,6 +54,23 @@
 
             <button type="submit">Save Profile</button>
         </form>
+
+        <section class="security-settings">
+            <h2>Change password</h2>
+            <form method="POST" action="{{ url_for('change_password') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="current_password">Current password</label>
+                <input type="password" id="current_password" name="current_password" autocomplete="current-password" required>
+
+                <label for="new_password">New password</label>
+                <input type="password" id="new_password" name="new_password" minlength="12" autocomplete="new-password" required>
+
+                <label for="confirm_password">Confirm new password</label>
+                <input type="password" id="confirm_password" name="confirm_password" minlength="12" autocomplete="new-password" required>
+
+                <button type="submit">Update password</button>
+            </form>
+        </section>
 
         <a href="{{ url_for('dashboard') }}"><button>Back to Feed</button></a>
     </div>

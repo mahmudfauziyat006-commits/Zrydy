@@ -10,7 +10,7 @@
 <body class="social-body">
     <nav class="topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
-        <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages</a><a href="{{ url_for('dashboard') }}">Feed</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button><a href="{{ url_for('logout') }}">Log out</a></div>
+        <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages</a><a href="{{ url_for('dashboard') }}">Feed</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button><form class="nav-logout" action="{{ url_for('logout') }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Log out</button></form></div>
     </nav>
     <main class="conversation-layout">
         <section class="conversation-panel">
@@ -33,6 +33,7 @@
                 {% endfor %}
             </div>
             <form class="reply-form" method="POST" action="{{ url_for('group_conversation', group_id=group['id']) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="body" placeholder="Message the group..." autocomplete="off" required>
                 <button type="submit">Send</button>
             </form>

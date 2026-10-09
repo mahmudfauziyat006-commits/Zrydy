@@ -1298,7 +1298,46 @@ body.social-body {
     border: 1px solid var(--line);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    color: var(--text);
+    color: #111111;
+}
+
+.social-body .message-panel,
+.social-body .conversation-panel,
+.social-body .notification-panel,
+.social-body .new-message-box,
+.social-body .message-list,
+.social-body .person-row,
+.social-body .conversation-row,
+.social-body .message-bubble,
+.social-body .conversation-header,
+.social-body .section-heading,
+.social-body .reply-form,
+.social-body .group-members,
+.social-body .empty-feed,
+.social-body .conversation-link,
+.social-body .message-panel input,
+.social-body .conversation-panel input,
+.social-body .message-panel textarea,
+.social-body .conversation-panel textarea,
+.social-body .message-panel select,
+.social-body .conversation-panel select {
+    color: #111111;
+}
+
+.social-body .message-bubble.sent {
+    color: #111111;
+}
+
+.social-body .message-bubble.sent time,
+.social-body .message-bubble.received time,
+.social-body .person-row small,
+.social-body .person-row time,
+.social-body .conversation-header p,
+.social-body .section-heading span,
+.social-body .new-message-box h2,
+.social-body .subheading,
+.social-body .muted {
+    color: #111111;
 }
 
 .social-body .sidebar {
@@ -1667,6 +1706,46 @@ body.social-body {
     background: #fff;
     color: #286a4a;
     border-color: #c9dacf;
+}
+
+.info-page {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: clamp(20px, 4vw, 48px);
+    background: #171b1f;
+    color: #111111;
+    text-align: left;
+}
+
+.info-page .auth-container {
+    width: min(560px, 100%);
+    margin: 0;
+    padding: clamp(26px, 4vw, 42px);
+    background: #20262b;
+    border: 1px solid #3a444c;
+    border-radius: 14px;
+    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.28);
+    color: #111111;
+}
+
+.info-page h1,
+.info-page p,
+.info-page a,
+.info-page label,
+.info-page li,
+.info-page strong,
+.info-page em,
+.info-page span {
+    color: #111111;
+}
+
+.info-page a {
+    text-decoration: underline;
+}
+
+.info-page p {
+    line-height: 1.7;
 }
 
 .social-body.light-mode {

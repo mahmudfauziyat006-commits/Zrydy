@@ -38,6 +38,7 @@
                 </div>
                 {% if session.get('user_id') and not is_self %}
                     <form class="profile-follow-form" method="POST" action="{{ url_for('toggle_follow', user_id=user['id']) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" aria-label="{{ 'Unfollow' if user['following'] else 'Follow' }} @{{ user['username'] }}">{{ 'Following' if user['following'] else '+ Follow' }}</button>
                     </form>
                 {% elif not is_self %}

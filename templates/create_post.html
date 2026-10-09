@@ -15,6 +15,7 @@
     <div class="auth-container">
         <h1>Create a Post</h1>
         <form method="POST" action="{{ url_for('create_post') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label for="caption">Caption</label>
             <textarea id="caption" name="caption" rows="4" placeholder="What's on your mind?"></textarea>
 

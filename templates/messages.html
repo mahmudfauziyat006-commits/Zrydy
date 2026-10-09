@@ -9,7 +9,7 @@
 <body class="social-body">
     <nav class="topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
-        <div class="nav-actions"><a href="{{ url_for('dashboard') }}">Feed</a><a href="{{ url_for('profile') }}">Profile</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button><a href="{{ url_for('logout') }}">Log out</a></div>
+        <div class="nav-actions"><a href="{{ url_for('dashboard') }}">Feed</a><a href="{{ url_for('profile') }}">Profile</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button><form class="nav-logout" action="{{ url_for('logout') }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Log out</button></form></div>
     </nav>
     <main class="messages-layout">
         <section class="message-panel">
@@ -17,7 +17,7 @@
             <section class="notification-panel" id="notifications">
                 <h2>Notifications</h2>
                 <p class="muted">New messages and follower activity appear here.</p>
-                <form method="POST" action="{{ url_for('mark_notifications_read') }}"><button type="submit">Mark follower notifications read</button></form>
+                <form method="POST" action="{{ url_for('mark_notifications_read') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Mark follower notifications read</button></form>
             </section>
             <div class="new-message-box">
                 <h2>Start a conversation</h2>
@@ -34,6 +34,7 @@
             <div class="new-message-box">
                 <h2>Create a group chat</h2>
                 <form method="POST" action="{{ url_for('create_group') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <label for="group-name">Group name</label>
                     <input id="group-name" name="name" type="text" placeholder="e.g. Weekend crew" required>
                     <p class="muted">Choose people to add:</p>
@@ -64,7 +65,7 @@
                     <span><strong>{{ chat['full_name'] }}</strong><small>{{ chat['body']|truncate(58) }}</small></span>
                     <time>{{ chat['created_at'] }}</time>
                     </a>
-                    <form method="POST" action="{{ url_for('delete_conversation', user_id=chat['id']) }}"><button type="submit">Delete</button></form>
+                    <form method="POST" action="{{ url_for('delete_conversation', user_id=chat['id']) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Delete</button></form>
                 </div>
             {% else %}
                 <div class="empty-feed"><p>Your conversations will appear here.</p></div>

@@ -1,5 +1,7 @@
 import os
 import json
+import hashlib
+import hmac
 import secrets
 import sqlite3
 from datetime import datetime, timedelta
@@ -7,7 +9,7 @@ from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Flask, flash, g, jsonify, redirect, render_template, render_template_string, request, send_from_directory, session, url_for
+from flask import Flask, abort, flash, g, jsonify, redirect, render_template, render_template_string, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -22,13 +24,126 @@ app = Flask(__name__)
 APP_DIR = Path(__file__).resolve().parent
 UPLOAD_FOLDER = Path(os.environ.get('UPLOAD_PATH', str(APP_DIR / 'uploads')))
 UPLOAD_FOLDER.mkdir(exist_ok=True)
+PRIVATE_UPLOAD_FOLDER = Path(os.environ.get('PRIVATE_UPLOAD_PATH', str(APP_DIR / 'private_uploads')))
+PRIVATE_UPLOAD_FOLDER.mkdir(exist_ok=True)
 
 app.config['DATABASE'] = os.environ.get('DATABASE_PATH', str(APP_DIR / 'social_media.db'))
 app.config['DATABASE_URL'] = os.environ.get('DATABASE_URL', '').strip()
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'local-development-secret-key')
+secret_key = os.environ.get('SECRET_KEY', '').strip()
+production_mode = os.environ.get('APP_ENV', '').lower() == 'production' or os.environ.get('RENDER', '').lower() in {'1', 'true', 'yes'}
+if production_mode and not secret_key:
+    raise RuntimeError('SECRET_KEY must be configured in production.')
+app.config['SECRET_KEY'] = secret_key or 'local-development-secret-key'
+app.config['SESSION_COOKIE_SECURE'] = production_mode
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
+app.config['CSRF_ENABLED'] = True
+app.config['AUTH_RATE_LIMITS_ENABLED'] = True
 app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 app.config['MAX_VIDEO_MINUTES'] = 10
+
+
+def csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+
+def rate_limit_subject_hash(value):
+    return hmac.new(
+        app.config['SECRET_KEY'].encode('utf-8'),
+        value.encode('utf-8'),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def inspect_message_media(upload):
+    filename = secure_filename(upload.filename or '')
+    extension = Path(filename).suffix.lower()
+    stream = upload.stream
+    original_position = stream.tell()
+    header = stream.read(32)
+    stream.seek(0, os.SEEK_END)
+    size = stream.tell()
+    stream.seek(original_position)
+    if size > 50 * 1024 * 1024:
+        raise ValueError('Message attachments must be 50 MB or smaller.')
+
+    signatures = {
+        '.jpg': ('image', header.startswith(b'\xff\xd8\xff')),
+        '.jpeg': ('image', header.startswith(b'\xff\xd8\xff')),
+        '.png': ('image', header.startswith(b'\x89PNG\r\n\x1a\n')),
+        '.gif': ('image', header.startswith((b'GIF87a', b'GIF89a'))),
+        '.webp': ('image', header.startswith(b'RIFF') and header[8:12] == b'WEBP'),
+        '.mp4': ('video', len(header) >= 12 and header[4:8] == b'ftyp'),
+        '.m4v': ('video', len(header) >= 12 and header[4:8] == b'ftyp'),
+        '.mov': ('video', len(header) >= 12 and header[4:8] == b'ftyp'),
+        '.avi': ('video', header.startswith(b'RIFF') and header[8:12] == b'AVI '),
+        '.webm': ('video', header.startswith(b'\x1aE\xdf\xa3')),
+        '.mp3': ('audio', header.startswith(b'ID3') or (len(header) > 1 and header[0] == 0xff and header[1] & 0xe0 == 0xe0)),
+        '.wav': ('audio', header.startswith(b'RIFF') and header[8:12] == b'WAVE'),
+        '.ogg': ('audio', header.startswith(b'OggS')),
+        '.m4a': ('audio', len(header) >= 12 and header[4:8] == b'ftyp'),
+    }
+    detected = signatures.get(extension)
+    if not filename or detected is None or not detected[1]:
+        raise ValueError('That file type is not supported or does not match its contents.')
+    return detected[0], f'{secrets.token_hex(16)}{extension}'
+
+
+def rate_limit_exceeded(scope, subjects, limit, window_seconds):
+    db = get_db()
+    now = datetime.utcnow()
+    cutoff = (now - timedelta(seconds=window_seconds)).isoformat(timespec='seconds')
+    retention_cutoff = (now - timedelta(days=1)).isoformat(timespec='seconds')
+    db.execute('DELETE FROM auth_rate_events WHERE occurred_at < ?', (retention_cutoff,))
+    for subject in set(subjects):
+        subject_hash = rate_limit_subject_hash(subject)
+        attempts = fetch_scalar(
+            'SELECT COUNT(*) FROM auth_rate_events WHERE scope = ? AND subject_hash = ? AND occurred_at >= ?',
+            (scope, subject_hash, cutoff),
+        ) or 0
+        if attempts >= limit:
+            return True
+    return False
+
+
+def record_rate_limit_events(scope, subjects):
+    now = datetime.utcnow().isoformat(timespec='seconds')
+    get_db().executemany(
+        'INSERT INTO auth_rate_events (scope, subject_hash, occurred_at) VALUES (?, ?, ?)',
+        [(scope, rate_limit_subject_hash(subject), now) for subject in set(subjects)],
+    )
+    get_db().commit()
+
+
+app.jinja_env.globals['csrf_token'] = csrf_token
+
+
+@app.before_request
+def protect_state_changing_requests():
+    if app.testing or not app.config['CSRF_ENABLED'] or request.method in {'GET', 'HEAD', 'OPTIONS', 'TRACE'}:
+        return None
+    expected = session.get('_csrf_token', '')
+    supplied = request.form.get('csrf_token') or request.headers.get('X-CSRFToken', '')
+    if not expected or not supplied or not hmac.compare_digest(str(expected), str(supplied)):
+        return 'CSRF validation failed.', 400
+    return None
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()')
+    if production_mode:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    return response
 
 
 class PostgresDatabase:
@@ -79,6 +194,44 @@ def close_db(_exception):
     db = getattr(g, '_database', None)
     if db is not None:
         db.close()
+
+
+def harden_legacy_admin(db):
+    legacy_admin = db.execute(
+        'SELECT id, password_hash FROM users WHERE username = ? AND email = ?',
+        ('admin', 'admin@zrydy.com'),
+    ).fetchone()
+    if legacy_admin and check_password_hash(legacy_admin['password_hash'], 'admin123'):
+        db.execute(
+            'UPDATE users SET password_hash = ?, is_admin = 0 WHERE id = ?',
+            (generate_password_hash(secrets.token_urlsafe(32)), legacy_admin['id']),
+        )
+
+
+def provision_configured_admin(db):
+    username = os.environ.get('BOOTSTRAP_ADMIN_USERNAME', '').strip().lower()
+    email = os.environ.get('BOOTSTRAP_ADMIN_EMAIL', '').strip().lower()
+    password = os.environ.get('BOOTSTRAP_ADMIN_PASSWORD', '')
+    if not username and not email and not password:
+        return
+    if not username or not email or len(password) < 24:
+        raise RuntimeError('Configure BOOTSTRAP_ADMIN_USERNAME, BOOTSTRAP_ADMIN_EMAIL, and a 24-character BOOTSTRAP_ADMIN_PASSWORD together.')
+    existing = db.execute(
+        'SELECT id, username, email FROM users WHERE username = ? OR email = ?',
+        (username, email),
+    ).fetchone()
+    if existing:
+        if existing['username'] != username or existing['email'] != email:
+            raise RuntimeError('Bootstrap admin username/email conflicts with an existing account.')
+        db.execute(
+            'UPDATE users SET password_hash = ?, is_admin = 1 WHERE id = ?',
+            (generate_password_hash(password), existing['id']),
+        )
+        return
+    db.execute(
+        'INSERT INTO users (full_name, username, email, password_hash, bio, profile_picture, is_admin) VALUES (?, ?, ?, ?, ?, ?, 1)',
+        ('Platform Administrator', username, email, generate_password_hash(password), 'Platform administration', ''),
+    )
 
 
 def init_postgres_db():
@@ -165,18 +318,18 @@ def init_postgres_db():
             kind TEXT NOT NULL, body TEXT NOT NULL, target_url TEXT DEFAULT '', is_read INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''',
+        '''CREATE TABLE IF NOT EXISTS auth_rate_events (
+            id SERIAL PRIMARY KEY, scope TEXT NOT NULL, subject_hash TEXT NOT NULL,
+            occurred_at TEXT NOT NULL
+        )''',
     ]
     for statement in statements:
         db.execute(statement)
     db.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_path TEXT DEFAULT ''")
     db.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT 'text'")
     db.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER NOT NULL DEFAULT 0')
-    admin = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
-    if admin is None:
-        db.execute(
-            'INSERT INTO users (full_name, username, email, password_hash, bio, profile_picture, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            ('System Admin', 'admin', 'admin@zrydy.com', generate_password_hash('admin123'), 'Welcome to Zrydy', '', 1),
-        )
+    harden_legacy_admin(db)
+    provision_configured_admin(db)
     db.commit()
 
 
@@ -351,13 +504,13 @@ def init_db():
             kind TEXT NOT NULL, body TEXT NOT NULL, target_url TEXT DEFAULT '',
             is_read INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS auth_rate_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL,
+            subject_hash TEXT NOT NULL, occurred_at TEXT NOT NULL
+        )''')
 
-        admin = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
-        if admin is None:
-            db.execute(
-                'INSERT INTO users (full_name, username, email, password_hash, bio, profile_picture, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                ('System Admin', 'admin', 'admin@zrydy.com', generate_password_hash('admin123'), 'Welcome to Zrydy', '', 1),
-            )
+        harden_legacy_admin(db)
+        provision_configured_admin(db)
         db.commit()
 
 
@@ -542,7 +695,36 @@ def notifications():
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
+    if get_db().execute('SELECT 1 FROM messages WHERE media_path = ? LIMIT 1', (filename,)).fetchone():
+        abort(404)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+@app.route('/message-uploads/<path:filename>')
+@login_required
+def uploaded_message_file(filename):
+    safe_filename = secure_filename(filename)
+    if not safe_filename or safe_filename != filename:
+        abort(404)
+    db = get_db()
+    message = db.execute(
+        '''SELECT media_type FROM messages
+           WHERE media_path = ? AND (sender_id = ? OR recipient_id = ?)
+           LIMIT 1''',
+        (filename, session['user_id'], session['user_id']),
+    ).fetchone()
+    if message is None:
+        abort(404)
+    directory = PRIVATE_UPLOAD_FOLDER if (PRIVATE_UPLOAD_FOLDER / filename).is_file() else Path(app.config['UPLOAD_FOLDER'])
+    response = send_from_directory(
+        directory,
+        filename,
+        as_attachment=message['media_type'] == 'file',
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self'; media-src 'self'; sandbox"
+    return response
 
 
 @app.route('/')
@@ -564,6 +746,12 @@ def health():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
+        signup_ip = f"ip:{request.remote_addr or 'unknown'}"
+        if app.config['AUTH_RATE_LIMITS_ENABLED']:
+            if rate_limit_exceeded('signup-ip', [signup_ip], 20, 3600):
+                flash('Too many signup attempts. Please try again later.', 'error')
+                return render_template('index.html'), 429
+            record_rate_limit_events('signup-ip', [signup_ip])
         full_name = request.form.get('full_name', '').strip()
         username = request.form.get('username', '').strip().lower()
         email = request.form.get('email', '').strip().lower()
@@ -588,10 +776,9 @@ def signup():
             return render_template('index.html')
 
         db = get_db()
-        is_admin = fetch_scalar('SELECT COUNT(*) AS total FROM users') == 0
         db.execute(
             'INSERT INTO users (full_name, username, email, password_hash, bio, profile_picture, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (full_name, username, email, generate_password_hash(password), 'New to Zrydy', '', 1 if is_admin else 0),
+            (full_name, username, email, generate_password_hash(password), 'New to Zrydy', '', 0),
         )
         db.commit()
 
@@ -600,6 +787,7 @@ def signup():
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['is_admin'] = bool(user['is_admin'])
+        session.permanent = True
         flash('Registration successful!', 'success')
         return redirect(url_for('dashboard'))
 
@@ -611,13 +799,28 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+        account_subject = f"account:{username.casefold()}"
+        ip_subject = f"ip:{request.remote_addr or 'unknown'}"
+        if app.config['AUTH_RATE_LIMITS_ENABLED'] and (
+            rate_limit_exceeded('login-account', [account_subject], 10, 900)
+            or rate_limit_exceeded('login-ip', [ip_subject], 30, 900)
+        ):
+            flash('Invalid username or password. Please try again later.', 'error')
+            return render_template('login.html'), 429
 
         user = get_user_by_username(username)
         if user and check_password_hash(user['password_hash'], password):
+            db = get_db()
+            db.execute(
+                'DELETE FROM auth_rate_events WHERE scope = ? AND subject_hash = ?',
+                ('login-account', rate_limit_subject_hash(account_subject)),
+            )
+            db.commit()
             session.clear()
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = bool(user['is_admin'])
+            session.permanent = True
             flash('Login successful!', 'success')
             next_url = request.args.get('next', '')
             parsed_next = urlsplit(next_url)
@@ -625,6 +828,9 @@ def login():
                 return redirect(next_url)
             return redirect(url_for('dashboard'))
 
+        if app.config['AUTH_RATE_LIMITS_ENABLED']:
+            record_rate_limit_events('login-account', [account_subject])
+            record_rate_limit_events('login-ip', [ip_subject])
         flash('Invalid username or password.', 'error')
 
     return render_template('login.html')
@@ -633,30 +839,37 @@ def login():
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        new_password = request.form.get('new_password', '')
-        confirm_password = request.form.get('confirm_password', '')
-
-        if not username or not new_password:
-            flash('Please enter a username and a new password.', 'error')
-            return render_template('forgot_password.html')
-
-        if new_password != confirm_password:
-            flash('Passwords do not match.', 'error')
-            return render_template('forgot_password.html')
-
-        user = get_user_by_username(username)
-        if not user:
-            flash('User not found.', 'error')
-            return render_template('forgot_password.html')
-
-        db = get_db()
-        db.execute('UPDATE users SET password_hash = ? WHERE id = ?', (generate_password_hash(new_password), user['id']))
-        db.commit()
-        flash('Password updated successfully. Please log in.', 'success')
-        return redirect(url_for('login'))
-
+        flash('Self-service recovery is unavailable until verified email recovery is configured. Sign in to change your password or contact support.', 'error')
     return render_template('forgot_password.html')
+
+
+@app.route('/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    confirm_password = request.form.get('confirm_password', '')
+    user = get_user_by_id(session['user_id'])
+    if not check_password_hash(user['password_hash'], current_password):
+        flash('Current password is incorrect.', 'error')
+        return redirect(url_for('profile'))
+    if len(new_password) < 12:
+        flash('Choose a new password with at least 12 characters.', 'error')
+        return redirect(url_for('profile'))
+    if new_password != confirm_password:
+        flash('New passwords do not match.', 'error')
+        return redirect(url_for('profile'))
+    if check_password_hash(user['password_hash'], new_password):
+        flash('Choose a password you have not used for this account.', 'error')
+        return redirect(url_for('profile'))
+    db = get_db()
+    db.execute(
+        'UPDATE users SET password_hash = ? WHERE id = ?',
+        (generate_password_hash(new_password), session['user_id']),
+    )
+    db.commit()
+    flash('Password changed successfully.', 'success')
+    return redirect(url_for('profile'))
 
 
 @app.route('/dashboard')
@@ -982,17 +1195,25 @@ def conversation(user_id):
 
     db = get_db()
     if request.method == 'POST':
+        message_subject = f"user:{session['user_id']}"
+        if app.config['AUTH_RATE_LIMITS_ENABLED'] and rate_limit_exceeded(
+            'message-send', [message_subject], 120, 3600,
+        ):
+            return 'Message limit reached. Please try again later.', 429
         body = request.form.get('body', '').strip()
         media = request.files.get('media')
         media_path = ''
         media_type = 'text'
         if media and media.filename:
-            filename = secure_filename(media.filename)
-            media_path = filename
-            extension = Path(filename).suffix.lower()
-            media_type = 'image' if extension in ('.png', '.jpg', '.jpeg', '.gif', '.webp') else 'video' if extension in ('.mp4', '.mov', '.webm', '.avi') else 'audio' if extension in ('.mp3', '.wav', '.ogg', '.m4a') else 'file'
-            media.save(UPLOAD_FOLDER / filename)
+            try:
+                media_type, media_path = inspect_message_media(media)
+            except ValueError as error:
+                flash(str(error), 'error')
+                return redirect(url_for('conversation', user_id=user_id))
+            media.save(PRIVATE_UPLOAD_FOLDER / media_path)
         if body or media_path:
+            if app.config['AUTH_RATE_LIMITS_ENABLED']:
+                record_rate_limit_events('message-send', [message_subject])
             db.execute(
                 'INSERT INTO messages (sender_id, recipient_id, body, media_path, media_type, is_read) VALUES (?, ?, ?, ?, ?, 0)',
                 (session['user_id'], user_id, body, media_path, media_type),
@@ -1176,16 +1397,7 @@ def create_post():
 
 @app.route('/submit-data', methods=['POST'])
 def submit_data():
-    name = request.form.get('name', '').strip()
-    username = request.form.get('username', '').strip()
-    email = request.form.get('email', '').strip()
-    user_input = request.form.get('user_input', '').strip()
-
-    save_path = APP_DIR / 'users.txt'
-    with save_path.open('a', encoding='utf-8') as f:
-        f.write(f'{name}|{username}|{email}|{user_input}\n')
-
-    return render_template('success.html', name=name, username=username, email=email, user_input=user_input)
+    return 'This legacy data-submission endpoint is disabled. Use the account signup form.', 410
 
 
 @app.route('/profile', methods=['GET', 'POST'])
@@ -1250,7 +1462,9 @@ def profile():
 @app.route('/admin')
 @login_required
 def admin():
-    if not session.get('is_admin'):
+    user = get_user_by_id(session['user_id'])
+    if user is None or not user['is_admin']:
+        session['is_admin'] = False
         flash('Access denied. Admin only.', 'error')
         return redirect(url_for('dashboard'))
 
@@ -1269,7 +1483,7 @@ def info_page(title, heading, content):
         <title>{{ title }}</title>
         <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     </head>
-    <body>
+    <body class="info-page">
         <div class="auth-container">
             <h1>{{ heading }}</h1>
             <p>{{ content|safe }}</p>
@@ -1340,7 +1554,7 @@ def developers_page():
     return info_page('Developers', 'Developers', 'Zrydy is designed to support mobile, messaging, posts, and camera features.')
 
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
     return redirect(url_for('login'))
