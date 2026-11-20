@@ -49,6 +49,38 @@
             <label for="bio">Update Bio</label>
             <textarea id="bio" name="bio" rows="3">{{ user['bio'] }}</textarea>
 
+            <label for="interests">Interests and topics</label>
+            <input type="text" id="interests" name="interests" value="{{ user['interests'] or '' }}" placeholder="Design, music, builders">
+
+            <label for="links">Links</label>
+            <input type="text" id="links" name="links" value="{{ user['links'] or '' }}" placeholder="https://your-space.example">
+
+            <label for="presence_state">Energy / Presence State</label>
+            <select id="presence_state" name="presence_state">
+                {% for state in ['Sparked', 'In the Zone', 'Open to Link', 'Quiet / Recharging'] %}
+                    <option value="{{ state }}" {% if user['presence_state'] == state %}selected{% endif %}>{{ state }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="privacy_default">Privacy default</label>
+            <select id="privacy_default" name="privacy_default">
+                {% for value, label in [('public', 'Public'), ('circle', 'Circle'), ('private', 'Private')] %}
+                    <option value="{{ value }}" {% if user['privacy_default'] == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="notification_preferences">Notification intensity</label>
+            <select id="notification_preferences" name="notification_preferences">
+                {% for value, label in [('all', 'All activity'), ('essential', 'Essential only'), ('none', 'Do not disturb')] %}
+                    <option value="{{ value }}" {% if user['notification_preferences'] == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            <label><input type="checkbox" name="quiet_mode" {% if user['quiet_mode'] %}checked{% endif %}> Quiet / Decompression Mode</label>
+
+            <label for="banner_picture">Profile Banner</label>
+            <input type="file" id="banner_picture" name="banner_picture" accept="image/*">
+
             <label for="profile_picture">Profile Picture</label>
             <input type="file" id="profile_picture" name="profile_picture" accept="image/*">
 
@@ -69,6 +101,17 @@
                 <input type="password" id="confirm_password" name="confirm_password" minlength="12" autocomplete="new-password" required>
 
                 <button type="submit">Update password</button>
+            </form>
+        </section>
+
+        <section class="account-data-settings">
+            <h2>Your data</h2>
+            <a href="{{ url_for('export_account') }}"><button type="button">Export account data</button></a>
+            <form method="POST" action="{{ url_for('delete_account') }}" onsubmit="return confirm('Delete your Zrydy account and associated data permanently?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="delete_password">Confirm password</label>
+                <input type="password" id="delete_password" name="password" autocomplete="current-password" required>
+                <button type="submit">Delete account</button>
             </form>
         </section>
 

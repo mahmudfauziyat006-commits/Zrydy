@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{{ pulse['body'] }} | Zrydy Pulse</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261120') }}">
+</head>
+<body class="social-body dark-mode">
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
+        <div class="nav-actions"><a href="{{ url_for('dashboard') }}">Feed</a><a href="{{ url_for('messages') }}">Inbox</a></div>
+    </nav>
+    <main class="conversation-layout">
+        <section class="conversation-panel pulse-room">
+            <header class="conversation-header">
+                <div>
+                    <span class="sig-pill">Live Intent Pulse</span>
+                    <h1>{{ pulse['body'] }}</h1>
+                    <p>@{{ pulse['username'] }}{% if pulse['topic'] %} · {{ pulse['topic'] }}{% endif %}{% if pulse['zone'] %} · {{ pulse['zone'] }}{% endif %}</p>
+                </div>
+                <div class="pulse-countdown" data-expires="{{ pulse['expires_at'] }}">Calculating...</div>
+            </header>
+            <div class="group-members">
+                {% for member in members %}<span>@{{ member['username'] }}</span>{% endfor %}
+            </div>
+            <div class="message-list" id="pulse-messages">
+                {% for message in messages %}
+                    <div class="message-bubble received">
+                        <strong>@{{ message['username'] }}</strong>
+                        <p>{{ message['body'] }}</p>
+                        <time>{{ message['created_at'] }}</time>
+                    </div>
+                {% else %}
+                    <div class="empty-feed"><p>Start the Pulse conversation.</p></div>
+                {% endfor %}
+            </div>
+            <form class="reply-form" method="POST" action="{{ url_for('pulse_room', pulse_id=pulse['id']) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="body" maxlength="500" placeholder="Reply in this room..." autocomplete="off" required>
+                <button type="submit">Send</button>
+            </form>
+        </section>
+    </main>
+    <script>
+        const countdown = document.querySelector('[data-expires]');
+        const expiresText = countdown.dataset.expires.replace(' ', 'T') + 'Z';
+        function updateCountdown() {
+            const remaining = new Date(expiresText).getTime() - Date.now();
+            if (remaining <= 0) {
+                countdown.textContent = 'Pulse ended';
+                return;
+            }
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            countdown.textContent = Math.floor(minutes / 60) + 'h ' + (minutes % 60) + 'm ' + seconds + 's';
+        }
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+    </script>
+</body>
+</html>

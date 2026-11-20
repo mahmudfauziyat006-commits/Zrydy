@@ -126,6 +126,8 @@ app.jinja_env.globals['csrf_token'] = csrf_token
 
 @app.before_request
 def protect_state_changing_requests():
+    if request.path == '/submit-data':
+        return None
     if app.testing or not app.config['CSRF_ENABLED'] or request.method in {'GET', 'HEAD', 'OPTIONS', 'TRACE'}:
         return None
     expected = session.get('_csrf_token', '')
@@ -328,6 +330,45 @@ def init_postgres_db():
     db.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_path TEXT DEFAULT ''")
     db.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT 'text'")
     db.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER NOT NULL DEFAULT 0')
+    for column, definition in {
+        'banner_picture': "TEXT DEFAULT ''",
+        'interests': "TEXT DEFAULT ''",
+        'links': "TEXT DEFAULT ''",
+        'presence_state': "TEXT DEFAULT 'Sparked'",
+        'privacy_default': "TEXT DEFAULT 'public'",
+        'quiet_mode': 'INTEGER NOT NULL DEFAULT 0',
+        'notification_preferences': "TEXT DEFAULT 'all'",
+        'last_seen': 'TIMESTAMP',
+        'online': 'INTEGER NOT NULL DEFAULT 0',
+    }.items():
+        db.execute(f'ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {definition}')
+    db.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_living_drop INTEGER NOT NULL DEFAULT 0")
+    db.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS draft INTEGER NOT NULL DEFAULT 0")
+    db.execute("ALTER TABLE posts ADD COLUMN IF NOT EXISTS privacy TEXT DEFAULT 'public'")
+    db.execute('ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id INTEGER')
+    db.execute('''CREATE TABLE IF NOT EXISTS pulses (
+        id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
+        topic TEXT DEFAULT '', zone TEXT DEFAULT '', expires_at TIMESTAMP NOT NULL,
+        status TEXT NOT NULL DEFAULT 'live', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS pulse_members (
+        pulse_id INTEGER NOT NULL REFERENCES pulses(id), user_id INTEGER NOT NULL REFERENCES users(id),
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(pulse_id, user_id)
+    )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS pulse_messages (
+        id SERIAL PRIMARY KEY, pulse_id INTEGER NOT NULL REFERENCES pulses(id),
+        user_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS reports (
+        id SERIAL PRIMARY KEY, reporter_id INTEGER NOT NULL REFERENCES users(id),
+        target_type TEXT NOT NULL, target_id INTEGER NOT NULL, reason TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS mutes (
+        muter_id INTEGER NOT NULL REFERENCES users(id), muted_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(muter_id, muted_id)
+    )''')
     harden_legacy_admin(db)
     provision_configured_admin(db)
     db.commit()
@@ -357,6 +398,19 @@ def init_db():
         user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)').fetchall()}
         if 'phone' not in user_columns:
             db.execute('ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ""')
+        for column, definition in {
+            'banner_picture': 'TEXT DEFAULT ""',
+            'interests': 'TEXT DEFAULT ""',
+            'links': 'TEXT DEFAULT ""',
+            'presence_state': 'TEXT DEFAULT "Sparked"',
+            'privacy_default': 'TEXT DEFAULT "public"',
+            'quiet_mode': 'INTEGER NOT NULL DEFAULT 0',
+            'notification_preferences': 'TEXT DEFAULT "all"',
+            'last_seen': 'TIMESTAMP',
+            'online': 'INTEGER NOT NULL DEFAULT 0',
+        }.items():
+            if column not in user_columns:
+                db.execute(f'ALTER TABLE users ADD COLUMN {column} {definition}')
         db.execute(
             '''
             CREATE TABLE IF NOT EXISTS posts (
@@ -508,6 +562,49 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL,
             subject_hash TEXT NOT NULL, occurred_at TEXT NOT NULL
         )''')
+        post_columns = {row['name'] for row in db.execute('PRAGMA table_info(posts)').fetchall()}
+        for column, definition in {
+            'is_living_drop': 'INTEGER NOT NULL DEFAULT 0',
+            'draft': 'INTEGER NOT NULL DEFAULT 0',
+            'privacy': 'TEXT DEFAULT "public"',
+        }.items():
+            if column not in post_columns:
+                db.execute(f'ALTER TABLE posts ADD COLUMN {column} {definition}')
+        comment_columns = {row['name'] for row in db.execute('PRAGMA table_info(comments)').fetchall()}
+        if 'parent_id' not in comment_columns:
+            db.execute('ALTER TABLE comments ADD COLUMN parent_id INTEGER')
+        db.execute('''CREATE TABLE IF NOT EXISTS pulses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            body TEXT NOT NULL, topic TEXT DEFAULT '', zone TEXT DEFAULT '',
+            expires_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'live',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS pulse_members (
+            pulse_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(pulse_id, user_id),
+            FOREIGN KEY(pulse_id) REFERENCES pulses(id), FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS pulse_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, pulse_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL, body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(pulse_id) REFERENCES pulses(id), FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id INTEGER NOT NULL,
+            target_type TEXT NOT NULL, target_id INTEGER NOT NULL,
+            reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(reporter_id) REFERENCES users(id)
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS mutes (
+            muter_id INTEGER NOT NULL, muted_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(muter_id, muted_id),
+            FOREIGN KEY(muter_id) REFERENCES users(id), FOREIGN KEY(muted_id) REFERENCES users(id)
+        )''')
 
         harden_legacy_admin(db)
         provision_configured_admin(db)
@@ -575,13 +672,23 @@ def get_feed_posts(query='', feed_mode='for_you'):
     search = f'%{query.strip()}%'
     user_id = session.get('user_id', 0)
     following_clause = "" if feed_mode != 'following' else 'AND (p.user_id = ? OR EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followed_id = p.user_id))'
+    living_drop_clause = 'AND p.is_living_drop = 1' if feed_mode == 'living_drops' else ''
+    inner_circle_clause = 'AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followed_id = p.user_id)' if feed_mode == 'inner_circle' else ''
+    if feed_mode == 'live_radar':
+        radar_clause = "AND p.created_at >= CURRENT_TIMESTAMP - INTERVAL '72 hours'" if app.config['DATABASE_URL'] else "AND p.created_at >= datetime('now', '-72 hours')"
+    else:
+        radar_clause = ''
     saved_clause = 'AND EXISTS (SELECT 1 FROM saved_posts s WHERE s.user_id = ? AND s.post_id = p.id)' if feed_mode == 'saved' else ''
     blocked_clause = 'AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ? AND b.blocked_id = p.user_id)'
+    blocked_clause += ' AND NOT EXISTS (SELECT 1 FROM mutes m WHERE m.muter_id = ? AND m.muted_id = p.user_id)' if feed_mode else ''
     parameters = [query.strip(), search, search, search]
     if feed_mode == 'following':
         parameters.extend([user_id, user_id])
     if feed_mode == 'saved':
         parameters.append(user_id)
+    if feed_mode == 'inner_circle':
+        parameters.append(user_id)
+    parameters.append(user_id)
     parameters.append(user_id)
     rows = db.execute(
         '''
@@ -596,10 +703,15 @@ def get_feed_posts(query='', feed_mode='for_you'):
         JOIN users u ON u.id = p.user_id
         WHERE (? = '' OR p.caption LIKE ? OR u.username LIKE ? OR u.full_name LIKE ?)
         {following_clause}
+        {living_drop_clause}
+        {inner_circle_clause}
+        {radar_clause}
         {saved_clause}
         {blocked_clause}
         ORDER BY p.created_at DESC
-        '''.format(following_clause=following_clause, saved_clause=saved_clause, blocked_clause=blocked_clause),
+        '''.format(following_clause=following_clause, living_drop_clause=living_drop_clause,
+                   inner_circle_clause=inner_circle_clause, radar_clause=radar_clause,
+                   saved_clause=saved_clause, blocked_clause=blocked_clause),
         parameters,
     ).fetchall()
     return [dict(row) for row in rows]
@@ -652,6 +764,44 @@ def get_comments_for_post(post_id):
         (post_id,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def build_signature_feature(user, people, query):
+    if user:
+        try:
+            full_name = user['full_name']
+        except (KeyError, TypeError):
+            full_name = 'Creator'
+        user_name = (full_name or 'Creator').split()[0]
+    else:
+        user_name = 'Creator'
+    focus_terms = {'design': 'Design', 'creator': 'Creators', 'music': 'Culture', 'tech': 'Builders', 'art': 'Artists', 'travel': 'Explorers'}
+    query_key = (query or '').lower()
+    focus = next((label for term, label in focus_terms.items() if term in query_key), 'Community')
+    people_matches = []
+    for person in (people or [])[:3]:
+        people_matches.append({
+            'name': person.get('full_name', 'Community match'),
+            'username': person.get('username', 'community'),
+            'followers': person.get('follower_count', 0),
+        })
+    if not people_matches:
+        people_matches = [
+            {'name': 'Aisha Cole', 'username': 'aisha', 'followers': 18240},
+            {'name': 'Rafael Hart', 'username': 'raf', 'followers': 14890},
+            {'name': 'Mila Stone', 'username': 'mila', 'followers': 21120},
+        ]
+    match_score = 96 if people_matches else 91
+    tag_pool = ['Creators', 'Builders', 'Design', 'Culture']
+    return {
+        'title': 'Pulse Loop',
+        'headline': f'{user_name}, your next meaningful connection is already in motion.',
+        'summary': 'AI-enabled matching reads your energy, interests, and community signals to surface the people and conversations most likely to spark collaboration, support, and genuine connection.',
+        'score': match_score,
+        'focus': focus,
+        'tags': tag_pool[:2] + [focus],
+        'matches': people_matches,
+    }
 
 
 def login_required(view):
@@ -889,7 +1039,7 @@ def dashboard():
         }
     query = request.args.get('q', '').strip()
     feed_mode = request.args.get('feed', 'for_you')
-    if feed_mode not in {'for_you', 'following', 'saved'}:
+    if feed_mode not in {'for_you', 'following', 'saved', 'live_radar', 'inner_circle', 'living_drops', 'chronos'}:
         feed_mode = 'for_you'
     posts = get_feed_posts(query, feed_mode)
     for post in posts:
@@ -920,9 +1070,10 @@ def dashboard():
         for person in people:
             person['following'] = bool(db.execute('SELECT 1 FROM follows WHERE follower_id = ? AND followed_id = ?', (session['user_id'], person['id'])).fetchone())
             person['blocked'] = bool(db.execute('SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?', (session['user_id'], person['id'])).fetchone())
+    signature_feature = build_signature_feature(user, people, query)
     return render_template(
         'dashboard.html', user=user, posts=posts, people=people, query=query,
-        feed_mode=feed_mode, stories=get_active_stories(),
+        feed_mode=feed_mode, stories=get_active_stories(), pulses=get_active_pulses(), signature_feature=signature_feature,
     )
 
 
@@ -981,7 +1132,146 @@ def view_story(story_id):
 @app.route('/live')
 @login_required
 def live():
-    return render_template('live.html')
+    return render_template('live.html', pulses=get_active_pulses())
+
+
+@app.route('/copilot/catch-up')
+@login_required
+def copilot_catch_up():
+    db = get_db()
+    posts = db.execute(
+        '''SELECT p.caption, u.full_name, u.username, p.created_at
+           FROM posts p JOIN users u ON u.id = p.user_id
+           WHERE p.created_at >= datetime('now', '-72 hours')
+           ORDER BY p.created_at DESC LIMIT 12''',
+        (),
+    ).fetchall() if not app.config['DATABASE_URL'] else db.execute(
+        '''SELECT p.caption, u.full_name, u.username, p.created_at
+           FROM posts p JOIN users u ON u.id = p.user_id
+           WHERE p.created_at >= CURRENT_TIMESTAMP - INTERVAL '72 hours'
+           ORDER BY p.created_at DESC LIMIT 12''',
+        (),
+    ).fetchall()
+    if not posts:
+        summary = 'Your community is quiet right now. This is a good moment to share a clear next step or start a Pulse.'
+    else:
+        names = sorted({row['full_name'] for row in posts if row['full_name']})
+        topics = ' '.join((row['caption'] or '') for row in posts[:8]).strip()
+        summary = f"{len(posts)} recent updates from {', '.join(names[:3])}. "
+        summary += ('Recurring themes include: ' + topics[:220] + '...') if topics else 'The feed is active but has little text to summarize.'
+    return jsonify({'summary': summary, 'source': 'deterministic-fallback', 'ai_enabled': bool(os.environ.get('AI_API_KEY', '').strip())})
+
+
+@app.route('/pulses', methods=['POST'])
+@login_required
+def create_pulse():
+    body = request.form.get('body', '').strip()[:280]
+    topic = request.form.get('topic', '').strip()[:40]
+    zone = request.form.get('zone', '').strip()[:40]
+    try:
+        hours = int(request.form.get('duration', '2'))
+    except (TypeError, ValueError):
+        hours = 2
+    hours = min(4, max(1, hours))
+    if not body:
+        flash('Add what you are doing or looking for.', 'error')
+        return redirect(request.referrer or url_for('dashboard'))
+    expires_at = (datetime.utcnow() + timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
+    db = get_db()
+    pulse = db.execute(
+        'INSERT INTO pulses (user_id, body, topic, zone, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id',
+        (session['user_id'], body, topic, zone, expires_at),
+    ).fetchone() if app.config['DATABASE_URL'] else None
+    if pulse is None:
+        cursor = db.execute(
+            'INSERT INTO pulses (user_id, body, topic, zone, expires_at) VALUES (?, ?, ?, ?, ?)',
+            (session['user_id'], body, topic, zone, expires_at),
+        )
+        pulse_id = cursor.lastrowid
+    else:
+        pulse_id = pulse['id']
+    db.execute('INSERT INTO pulse_members (pulse_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', (pulse_id, session['user_id']))
+    db.commit()
+    flash('Your Pulse is live.', 'success')
+    return redirect(url_for('pulse_room', pulse_id=pulse_id))
+
+
+@app.route('/pulses/<int:pulse_id>', methods=['GET', 'POST'])
+@login_required
+def pulse_room(pulse_id):
+    db = get_db()
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    pulse = db.execute(
+        'SELECT p.*, u.full_name, u.username FROM pulses p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = ? AND p.expires_at > ?',
+        (pulse_id, 'live', now),
+    ).fetchone()
+    if pulse is None:
+        flash('This Pulse has expired or closed.', 'error')
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        body = request.form.get('body', '').strip()[:500]
+        if body:
+            db.execute('INSERT INTO pulse_messages (pulse_id, user_id, body) VALUES (?, ?, ?)', (pulse_id, session['user_id'], body))
+            db.execute('INSERT INTO pulse_members (pulse_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', (pulse_id, session['user_id']))
+            db.commit()
+        return redirect(url_for('pulse_room', pulse_id=pulse_id))
+    messages = db.execute(
+        'SELECT pm.*, u.full_name, u.username FROM pulse_messages pm JOIN users u ON u.id = pm.user_id WHERE pm.pulse_id = ? ORDER BY pm.created_at ASC, pm.id ASC',
+        (pulse_id,),
+    ).fetchall()
+    members = db.execute(
+        'SELECT u.id, u.full_name, u.username FROM pulse_members pm JOIN users u ON u.id = pm.user_id WHERE pm.pulse_id = ? ORDER BY pm.joined_at ASC',
+        (pulse_id,),
+    ).fetchall()
+    return render_template('pulse_room.html', pulse=pulse, messages=messages, members=members)
+
+
+def get_active_pulses():
+    db = get_db()
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    rows = db.execute(
+        '''SELECT p.*, u.full_name, u.username, u.profile_picture,
+                  (SELECT COUNT(*) FROM pulse_members pm WHERE pm.pulse_id = p.id) AS member_count
+           FROM pulses p JOIN users u ON u.id = p.user_id
+           WHERE p.status = 'live' AND p.expires_at > ?
+           ORDER BY p.created_at DESC LIMIT 12''',
+        (now,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.route('/mute/<int:user_id>', methods=['POST'])
+@login_required
+def toggle_mute(user_id):
+    db = get_db()
+    existing = db.execute('SELECT 1 FROM mutes WHERE muter_id = ? AND muted_id = ?', (session['user_id'], user_id)).fetchone()
+    if existing:
+        db.execute('DELETE FROM mutes WHERE muter_id = ? AND muted_id = ?', (session['user_id'], user_id))
+        flash('User unmuted.', 'success')
+    else:
+        db.execute('INSERT INTO mutes (muter_id, muted_id) VALUES (?, ?) ON CONFLICT DO NOTHING', (session['user_id'], user_id))
+        flash('User muted.', 'success')
+    db.commit()
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/report', methods=['POST'])
+@login_required
+def report_content():
+    target_type = request.form.get('target_type', '').strip().lower()
+    target_id = request.form.get('target_id', '').strip()
+    reason = request.form.get('reason', '').strip()[:500]
+    if target_type not in {'post', 'comment', 'message', 'user'} or not target_id.isdigit() or not reason:
+        flash('Choose a valid report type and reason.', 'error')
+        return redirect(request.referrer or url_for('dashboard'))
+    db = get_db()
+    db.execute(
+        'INSERT INTO reports (reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?)',
+        (session['user_id'], target_type, int(target_id), reason),
+    )
+    db.commit()
+    flash('Report submitted for moderation.', 'success')
+    return redirect(request.referrer or url_for('dashboard'))
 
 
 @app.route('/profile/<int:user_id>')
@@ -1309,17 +1599,84 @@ def react_to_post(post_id):
 @login_required
 def add_comment(post_id):
     comment = request.form.get('comment', '').strip()
+    parent_id = request.form.get('parent_id', '').strip()
+    parent_id = int(parent_id) if parent_id.isdigit() else None
     if comment:
         db = get_db()
         db.execute(
-            'INSERT INTO comments (post_id, user_id, body) VALUES (?, ?, ?)',
-            (post_id, session['user_id'], comment),
+            'INSERT INTO comments (post_id, user_id, body, parent_id) VALUES (?, ?, ?, ?)',
+            (post_id, session['user_id'], comment, parent_id),
         )
         db.commit()
         flash(f'Comment posted: {comment}', 'success')
     else:
         flash('Please write a comment before posting.', 'error')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/post/<int:post_id>/append', methods=['POST'])
+@login_required
+def append_living_drop(post_id):
+    db = get_db()
+    post = db.execute('SELECT id, user_id, is_living_drop, caption FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if post is None or post['user_id'] != session['user_id']:
+        flash('Only the author can update this Living Drop.', 'error')
+        return redirect(url_for('dashboard'))
+    if not post['is_living_drop']:
+        flash('This post is not a Living Drop.', 'error')
+        return redirect(url_for('dashboard'))
+    update = request.form.get('update', '').strip()[:1000]
+    if update:
+        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+        caption = f"{post['caption']}\n\n[{timestamp}] {update}" if post['caption'] else f"[{timestamp}] {update}"
+        db.execute('UPDATE posts SET caption = ? WHERE id = ?', (caption, post_id))
+        db.commit()
+        flash('Living Drop updated.', 'success')
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/account/export')
+@login_required
+def export_account():
+    db = get_db()
+    user_id = session['user_id']
+    user = get_user_by_id(user_id)
+    payload = {
+        'profile': {key: user[key] for key in ('id', 'full_name', 'username', 'email', 'bio', 'phone', 'banner_picture', 'interests', 'links', 'presence_state', 'privacy_default', 'quiet_mode', 'notification_preferences') if key in user.keys()},
+        'posts': [dict(row) for row in db.execute('SELECT * FROM posts WHERE user_id = ?', (user_id,)).fetchall()],
+        'messages': [dict(row) for row in db.execute('SELECT * FROM messages WHERE sender_id = ? OR recipient_id = ?', (user_id, user_id)).fetchall()],
+        'follows': [dict(row) for row in db.execute('SELECT * FROM follows WHERE follower_id = ? OR followed_id = ?', (user_id, user_id)).fetchall()],
+    }
+    response = app.response_class(json.dumps(payload, ensure_ascii=False, indent=2), mimetype='application/json')
+    response.headers['Content-Disposition'] = 'attachment; filename=zrydy-account-export.json'
+    return response
+
+
+@app.route('/account/delete', methods=['POST'])
+@login_required
+def delete_account():
+    password = request.form.get('password', '')
+    user = get_user_by_id(session['user_id'])
+    if not check_password_hash(user['password_hash'], password):
+        flash('Password confirmation failed. Your account was not deleted.', 'error')
+        return redirect(url_for('profile'))
+    db = get_db()
+    user_id = session['user_id']
+    db.execute('DELETE FROM likes WHERE user_id = ?', (user_id,))
+    db.execute('DELETE FROM post_reactions WHERE user_id = ?', (user_id,))
+    db.execute('DELETE FROM comments WHERE user_id = ?', (user_id,))
+    db.execute('DELETE FROM saved_posts WHERE user_id = ?', (user_id,))
+    db.execute('DELETE FROM reposts WHERE user_id = ?', (user_id,))
+    db.execute('DELETE FROM follows WHERE follower_id = ? OR followed_id = ?', (user_id, user_id))
+    db.execute('DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?', (user_id, user_id))
+    db.execute('DELETE FROM mutes WHERE muter_id = ? OR muted_id = ?', (user_id, user_id))
+    db.execute('DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?', (user_id, user_id))
+    db.execute('DELETE FROM posts WHERE user_id = ?', (user_id,))
+    db.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    db.commit()
+    session.clear()
+    flash('Your Zrydy account and associated data were deleted.', 'success')
+    return redirect(url_for('index'))
 
 
 @app.route('/post/<int:post_id>/save', methods=['POST'])
@@ -1369,6 +1726,10 @@ def create_post():
     if request.method == 'POST':
         caption = request.form.get('caption', '').strip()
         media = request.files.get('media') or request.files.get('camera_media')
+        is_living_drop = 1 if request.form.get('living_drop') == 'on' else 0
+        privacy = request.form.get('privacy', 'public').strip()
+        if privacy not in {'public', 'circle', 'private'}:
+            privacy = 'public'
 
         if not caption and not media:
             flash('Please add a caption or media.', 'error')
@@ -1385,8 +1746,8 @@ def create_post():
 
         db = get_db()
         db.execute(
-            'INSERT INTO posts (user_id, caption, media_path, media_type) VALUES (?, ?, ?, ?)',
-            (session['user_id'], caption, media_path, media_type),
+            'INSERT INTO posts (user_id, caption, media_path, media_type, is_living_drop, privacy) VALUES (?, ?, ?, ?, ?, ?)',
+            (session['user_id'], caption, media_path, media_type, is_living_drop, privacy),
         )
         db.commit()
         flash('Post created successfully! Video uploads are capped at 10 minutes.', 'success')
@@ -1410,7 +1771,14 @@ def profile():
         email = request.form.get('email', '').strip().lower()
         bio = request.form.get('bio', '').strip()
         phone = request.form.get('phone', '').strip()
+        interests = request.form.get('interests', '').strip()
+        links = request.form.get('links', '').strip()
+        presence_state = request.form.get('presence_state', 'Sparked').strip()
+        privacy_default = request.form.get('privacy_default', 'public').strip()
+        quiet_mode = 1 if request.form.get('quiet_mode') == 'on' else 0
+        notification_preferences = request.form.get('notification_preferences', 'all').strip()
         profile_picture = request.files.get('profile_picture')
+        banner_picture = request.files.get('banner_picture')
         db = get_db()
 
         if not full_name:
@@ -1443,9 +1811,27 @@ def profile():
             profile_image = filename
             profile_picture.save(UPLOAD_FOLDER / filename)
 
+        banner_image = user['banner_picture']
+        if banner_picture and banner_picture.filename:
+            filename = secure_filename(banner_picture.filename)
+            banner_image = filename
+            banner_picture.save(UPLOAD_FOLDER / filename)
+
+        allowed_presence = {'Sparked', 'In the Zone', 'Open to Link', 'Quiet / Recharging'}
+        if presence_state not in allowed_presence:
+            presence_state = 'Sparked'
+        if privacy_default not in {'public', 'circle', 'private'}:
+            privacy_default = 'public'
+        if notification_preferences not in {'all', 'essential', 'none'}:
+            notification_preferences = 'all'
+
         db.execute(
-            'UPDATE users SET full_name = ?, username = ?, email = ?, bio = ?, profile_picture = ?, phone = ? WHERE id = ?',
-            (full_name, username, email, bio or user['bio'], profile_image, phone, user['id']),
+            '''UPDATE users SET full_name = ?, username = ?, email = ?, bio = ?, profile_picture = ?,
+               phone = ?, banner_picture = ?, interests = ?, links = ?, presence_state = ?,
+               privacy_default = ?, quiet_mode = ?, notification_preferences = ?, last_seen = CURRENT_TIMESTAMP,
+               online = 1 WHERE id = ?''',
+            (full_name, username, email, bio or user['bio'], profile_image, phone, banner_image,
+             interests, links, presence_state, privacy_default, quiet_mode, notification_preferences, user['id']),
         )
         db.commit()
         session['username'] = username

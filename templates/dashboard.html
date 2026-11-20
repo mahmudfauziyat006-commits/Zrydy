@@ -67,6 +67,12 @@
                         <input class="hidden-input" type="file" id="media" name="media" accept="image/*,video/*">
                         <label class="camera-picker" for="camera">Use camera</label>
                         <input class="hidden-input" type="file" id="camera" name="camera_media" accept="image/*,video/*" capture="environment">
+                        <label><input type="checkbox" name="living_drop"> Living Drop</label>
+                        <select name="privacy" aria-label="Post privacy">
+                            <option value="public">Public</option>
+                            <option value="circle">Circle</option>
+                            <option value="private">Private</option>
+                        </select>
                         <button type="submit">Post</button>
                     </div>
                 </form>
@@ -108,8 +114,11 @@
             </div>
             {% if not query %}
                 <nav class="feed-tabs">
-                    <a class="{% if feed_mode == 'for_you' %}active{% endif %}" href="{{ url_for('dashboard', feed='for_you') }}">For You</a>
+                    <a class="{% if feed_mode == 'live_radar' %}active{% endif %}" href="{{ url_for('dashboard', feed='live_radar') }}">Live Radar</a>
+                    <a class="{% if feed_mode == 'inner_circle' %}active{% endif %}" href="{{ url_for('dashboard', feed='inner_circle') }}">Inner Circle</a>
+                    <a class="{% if feed_mode == 'living_drops' %}active{% endif %}" href="{{ url_for('dashboard', feed='living_drops') }}">Living Drops</a>
                     <a class="{% if feed_mode == 'following' %}active{% endif %}" href="{{ url_for('dashboard', feed='following') }}">Following</a>
+                    <a class="{% if feed_mode == 'chronos' %}active{% endif %}" href="{{ url_for('dashboard', feed='chronos') }}">Pure Chronos</a>
                     <a class="{% if feed_mode == 'saved' %}active{% endif %}" href="{{ url_for('dashboard', feed='saved') }}">Saved</a>
                 </nav>
             {% endif %}
@@ -148,6 +157,25 @@
                             <time>{{ post['created_at'] }}</time>
                         </header>
                         {% if post['caption'] %}<p class="post-caption">{{ post['caption'] }}</p>{% endif %}
+                        {% if post['is_living_drop'] and session.get('user_id') == post['user_id'] %}
+                            <form class="living-drop-update" action="{{ url_for('append_living_drop', post_id=post['id']) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="text" name="update" maxlength="1000" placeholder="Append today's progress..." required>
+                                <button type="submit">Add update</button>
+                            </form>
+                        {% endif %}
+                        {% if session.get('user_id') and session['user_id'] != post['user_id'] %}
+                            <details class="post-report">
+                                <summary>Report</summary>
+                                <form action="{{ url_for('report_content') }}" method="POST">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="target_type" value="post">
+                                    <input type="hidden" name="target_id" value="{{ post['id'] }}">
+                                    <input type="text" name="reason" maxlength="500" placeholder="Reason for reporting" required>
+                                    <button type="submit">Submit report</button>
+                                </form>
+                            </details>
+                        {% endif %}
                         {% if post['media_path'] and post['media_type'] == 'image' %}
                             <img class="post-media" src="{{ url_for('uploaded_file', filename=post['media_path']) }}" alt="Post image">
                         {% elif post['media_path'] and post['media_type'] == 'video' %}
@@ -187,11 +215,55 @@
         </section>
 
         <aside class="sidebar suggestions">
+            <section class="pulse-composer" aria-label="Publish a Live Intent Pulse">
+                <h2>Live Intent</h2>
+                <form action="{{ url_for('create_pulse') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="body" maxlength="280" placeholder="What are you doing or looking for?" required>
+                    <input type="text" name="topic" maxlength="40" placeholder="Topic">
+                    <input type="text" name="zone" maxlength="40" placeholder="Zone">
+                    <select name="duration" aria-label="Pulse duration">
+                        <option value="1">1 hour</option>
+                        <option value="2" selected>2 hours</option>
+                        <option value="4">4 hours</option>
+                    </select>
+                    <button type="submit">Publish Pulse</button>
+                </form>
+                {% for pulse in pulses %}
+                    <a class="pulse-row" href="{{ url_for('pulse_room', pulse_id=pulse['id']) }}"><strong>{{ pulse['body'] }}</strong><small>@{{ pulse['username'] }} · {{ pulse['member_count'] }} in room</small></a>
+                {% else %}<p class="muted">No live Pulses yet.</p>{% endfor %}
+            </section>
+            <section class="signature-feature" aria-label="Signature feature">
+                <div class="sig-feature-header">
+                    <span class="sig-pill">Signature feature</span>
+                    <span class="sig-score">{{ signature_feature.score }}% match</span>
+                </div>
+                <h2>{{ signature_feature.title }}</h2>
+                <p class="sig-headline">{{ signature_feature.headline }}</p>
+                <p>{{ signature_feature.summary }}</p>
+                <div class="sig-tags">
+                    {% for tag in signature_feature.tags %}<span>{{ tag }}</span>{% endfor %}
+                </div>
+                <div class="sig-matches">
+                    {% for match in signature_feature.matches %}
+                        <div class="sig-match">
+                            <div class="sig-match-avatar">{{ match.name[:1] }}</div>
+                            <div>
+                                <strong>{{ match.name }}</strong>
+                                <small>@{{ match.username }} · {{ match.followers }} followers</small>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                <a class="primary-link" href="{{ url_for('live') }}">Open Pulse Loop</a>
+            </section>
             <h2>Discover</h2>
             <p>Build your community by sharing regularly and updating your profile.</p>
             <a class="primary-link" href="{{ url_for('create_post') }}">Create a post</a>
             <a class="outline-link" href="{{ url_for('profile') }}">View profile</a>
             <a class="primary-link" href="{{ url_for('live') }}">Go live</a>
+            <button type="button" id="copilot-catch-up" class="outline-link">Catch me up</button>
+            <p id="copilot-summary" class="muted" aria-live="polite"></p>
         </aside>
     </main>
     <div class="story-viewer" id="story-viewer" role="dialog" aria-modal="true" aria-label="Story" aria-hidden="true" hidden>
@@ -239,6 +311,17 @@
         document.querySelectorAll('[data-emoji-target]').forEach(button => button.addEventListener('click', function () {
             document.getElementById(this.dataset.emojiTarget).value += ' 😊 ❤️ 😂 🔥 🙌';
         }));
+        document.getElementById('copilot-catch-up').addEventListener('click', async function () {
+            const summary = document.getElementById('copilot-summary');
+            summary.textContent = 'Summarizing your recent community activity...';
+            try {
+                const response = await fetch('{{ url_for('copilot_catch_up') }}');
+                const data = await response.json();
+                summary.textContent = data.summary;
+            } catch (error) {
+                summary.textContent = 'Catch Me Up is briefly unavailable.';
+            }
+        });
         const toast = document.querySelector('.social-toast');
         let toastTimer;
         function showToast(message) {
