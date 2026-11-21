@@ -6,7 +6,7 @@
     <title>Chat with {{ other_user['full_name'] }} | Zrydy</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
-<body class="social-body">
+<body class="zrydy-unified social-body dark-mode">
     <nav class="topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
         <div class="nav-actions"><a href="{{ url_for('messages') }}">All messages{% if unread_message_count %} ({{ unread_message_count }}){% endif %}</a><a href="{{ url_for('dashboard') }}">Feed</a><button class="theme-toggle" type="button" data-theme-toggle>Light mode</button></div>
