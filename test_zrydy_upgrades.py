@@ -80,3 +80,33 @@ def test_living_drop_and_report_paths_are_real(client):
         post = get_db().execute('SELECT id, is_living_drop FROM posts WHERE caption = ?', ('Shipping Zrydy v2',)).fetchone()
         assert post is not None
         assert post['is_living_drop'] == 1
+
+
+def test_notifications_render_and_chat_css_has_theme_contrast(client):
+    login(client, 'zrydyowner')
+    client.post('/create-post', data={'caption': 'A notification test post'}, follow_redirects=True)
+
+    with app.app_context():
+        from app import get_db
+        owner = get_db().execute('SELECT id FROM users WHERE username = ?', ('zrydyowner',)).fetchone()
+        post = get_db().execute('SELECT id FROM posts WHERE user_id = ?', (owner['id'],)).fetchone()
+
+    client.post('/logout')
+    login(client, 'zrydyviewer')
+    client.post(f"/user/{owner['id']}/follow", follow_redirects=True)
+    client.post(f"/post/{post['id']}/like", follow_redirects=True)
+    client.post(f"/post/{post['id']}/comment", data={'comment': '@zrydyowner Great update'}, follow_redirects=True)
+
+    inbox = client.get('/messages')
+    assert inbox.status_code == 200
+
+    with app.app_context():
+        from app import get_db
+        kinds = {row['kind'] for row in get_db().execute('SELECT kind FROM notifications WHERE user_id = ?', (owner['id'],)).fetchall()}
+        assert {'follow', 'like', 'reply', 'mention'} <= kinds
+
+    css_path = app.root_path + '/static/style.css'
+    with open(css_path, 'r', encoding='utf-8') as css_file:
+        css = css_file.read()
+    assert 'body.dark-mode .social-body .message-bubble.received' in css
+    assert 'body.light-mode .social-body .message-bubble.received' in css

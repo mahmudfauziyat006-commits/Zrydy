@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, render_template_string, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 try:
     import psycopg
@@ -21,6 +22,7 @@ except ImportError:
     dict_row = None
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 APP_DIR = Path(__file__).resolve().parent
 UPLOAD_FOLDER = Path(os.environ.get('UPLOAD_PATH', str(APP_DIR / 'uploads')))
 UPLOAD_FOLDER.mkdir(exist_ok=True)
@@ -35,6 +37,7 @@ if production_mode and not secret_key:
     raise RuntimeError('SECRET_KEY must be configured in production.')
 app.config['SECRET_KEY'] = secret_key or 'local-development-secret-key'
 app.config['SESSION_COOKIE_SECURE'] = production_mode
+app.config['SESSION_COOKIE_NAME'] = 'zrydy_session'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=12)
@@ -131,6 +134,8 @@ def protect_state_changing_requests():
     if app.testing or not app.config['CSRF_ENABLED'] or request.method in {'GET', 'HEAD', 'OPTIONS', 'TRACE'}:
         return None
     expected = session.get('_csrf_token', '')
+    if not expected:
+        expected = request.cookies.get('zrydy_csrf', '')
     supplied = request.form.get('csrf_token') or request.headers.get('X-CSRFToken', '')
     if not expected or not supplied or not hmac.compare_digest(str(expected), str(supplied)):
         return 'CSRF validation failed.', 400
@@ -139,6 +144,20 @@ def protect_state_changing_requests():
 
 @app.after_request
 def add_security_headers(response):
+    csrf_value = session.get('_csrf_token', '')
+    if csrf_value:
+        response.set_cookie(
+            'zrydy_csrf',
+            csrf_value,
+            httponly=True,
+            secure=production_mode,
+            samesite='Lax',
+            max_age=60 * 60 * 12,
+        )
+    if response.is_streamed:
+        response.headers.setdefault('Cache-Control', 'no-store')
+    elif response.mimetype in {'text/html', 'application/xhtml+xml'}:
+        response.headers.setdefault('Cache-Control', 'no-store, max-age=0, must-revalidate')
     response.headers.setdefault('X-Content-Type-Options', 'nosniff')
     response.headers.setdefault('X-Frame-Options', 'DENY')
     response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
@@ -653,6 +672,17 @@ def get_unread_notification_count():
 def notify(user_id, actor_id, kind, body, target_url=''):
     if user_id == actor_id:
         return
+    preferences = get_db().execute(
+        'SELECT notification_preferences, quiet_mode FROM users WHERE id = ?',
+        (user_id,),
+    ).fetchone()
+    if preferences:
+        if preferences['quiet_mode'] and kind not in {'message', 'mention', 'follow', 'pulse'}:
+            return
+        if preferences['notification_preferences'] == 'none':
+            return
+        if preferences['notification_preferences'] == 'essential' and kind not in {'message', 'mention', 'follow', 'pulse'}:
+            return
     get_db().execute(
         'INSERT INTO notifications (user_id, actor_id, kind, body, target_url) VALUES (?, ?, ?, ?, ?)',
         (user_id, actor_id, kind, body, target_url),
@@ -1191,6 +1221,9 @@ def create_pulse():
     else:
         pulse_id = pulse['id']
     db.execute('INSERT INTO pulse_members (pulse_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', (pulse_id, session['user_id']))
+    followers = db.execute('SELECT follower_id FROM follows WHERE followed_id = ?', (session['user_id'],)).fetchall()
+    for follower in followers:
+        notify(follower['follower_id'], session['user_id'], 'pulse', f"{session.get('username', 'Someone')} published a new Pulse.", url_for('pulse_room', pulse_id=pulse_id))
     db.commit()
     flash('Your Pulse is live.', 'success')
     return redirect(url_for('pulse_room', pulse_id=pulse_id))
@@ -1213,6 +1246,7 @@ def pulse_room(pulse_id):
         if body:
             db.execute('INSERT INTO pulse_messages (pulse_id, user_id, body) VALUES (?, ?, ?)', (pulse_id, session['user_id'], body))
             db.execute('INSERT INTO pulse_members (pulse_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', (pulse_id, session['user_id']))
+            notify(pulse['user_id'], session['user_id'], 'pulse', f"{session.get('username', 'Someone')} joined or replied to your Pulse.", url_for('pulse_room', pulse_id=pulse_id))
             db.commit()
         return redirect(url_for('pulse_room', pulse_id=pulse_id))
     messages = db.execute(
@@ -1404,7 +1438,14 @@ def messages():
         ''',
         (session['user_id'],),
     ).fetchall()
-    return render_template('messages.html', conversations=conversations, users=get_all_users(), groups=groups)
+    alerts = db.execute(
+        '''SELECT n.*, u.username AS actor_username, u.full_name AS actor_name
+           FROM notifications n LEFT JOIN users u ON u.id = n.actor_id
+           WHERE n.user_id = ?
+           ORDER BY n.is_read ASC, n.created_at DESC, n.id DESC LIMIT 50''',
+        (session['user_id'],),
+    ).fetchall()
+    return render_template('messages.html', conversations=conversations, users=get_all_users(), groups=groups, alerts=alerts)
 
 
 @app.route('/groups/create', methods=['POST'])
@@ -1454,6 +1495,9 @@ def group_conversation(group_id):
                 'INSERT INTO group_messages (group_id, sender_id, body) VALUES (?, ?, ?)',
                 (group_id, session['user_id'], body),
             )
+            members = db.execute('SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?', (group_id, session['user_id'])).fetchall()
+            for member in members:
+                notify(member['user_id'], session['user_id'], 'message', f"New group message in {group['name']}.", url_for('group_conversation', group_id=group_id))
             db.commit()
         return redirect(url_for('group_conversation', group_id=group_id))
     group_messages = db.execute(
@@ -1508,6 +1552,7 @@ def conversation(user_id):
                 'INSERT INTO messages (sender_id, recipient_id, body, media_path, media_type, is_read) VALUES (?, ?, ?, ?, ?, 0)',
                 (session['user_id'], user_id, body, media_path, media_type),
             )
+            notify(user_id, session['user_id'], 'message', f"{session.get('username', 'Someone')} sent you a message.", url_for('conversation', user_id=session['user_id']))
             db.commit()
         return redirect(url_for('conversation', user_id=user_id))
 
@@ -1548,6 +1593,9 @@ def toggle_like(post_id):
             'INSERT INTO likes (user_id, post_id) VALUES (?, ?)',
             (session['user_id'], post_id),
         )
+        post = db.execute('SELECT user_id FROM posts WHERE id = ?', (post_id,)).fetchone()
+        if post:
+            notify(post['user_id'], session['user_id'], 'like', f"{session.get('username', 'Someone')} liked your post.", url_for('dashboard'))
         flash('Post liked.', 'success')
 
     db.commit()
@@ -1603,10 +1651,17 @@ def add_comment(post_id):
     parent_id = int(parent_id) if parent_id.isdigit() else None
     if comment:
         db = get_db()
+        post = db.execute('SELECT user_id FROM posts WHERE id = ?', (post_id,)).fetchone()
         db.execute(
             'INSERT INTO comments (post_id, user_id, body, parent_id) VALUES (?, ?, ?, ?)',
             (post_id, session['user_id'], comment, parent_id),
         )
+        if post:
+            notify(post['user_id'], session['user_id'], 'reply', f"{session.get('username', 'Someone')} replied to your post.", url_for('dashboard'))
+        for handle in {word[1:].lower() for word in comment.replace(',', ' ').replace('.', ' ').split() if word.startswith('@') and len(word) > 1}:
+            mentioned = db.execute('SELECT id FROM users WHERE LOWER(username) = ?', (handle,)).fetchone()
+            if mentioned:
+                notify(mentioned['id'], session['user_id'], 'mention', f"{session.get('username', 'Someone')} mentioned you in a comment.", url_for('dashboard'))
         db.commit()
         flash(f'Comment posted: {comment}', 'success')
     else:

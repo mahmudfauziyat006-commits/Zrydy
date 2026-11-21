@@ -671,6 +671,176 @@ th {
     font-size: 1rem;
 }
 
+.notification-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid #dfe6e2;
+    border-radius: 8px;
+    color: #111111;
+    text-decoration: none;
+}
+
+.notification-row.unread {
+    border-left: 4px solid #57bd8a;
+}
+
+.notification-row > span:last-child {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.notification-row small,
+.notification-row time {
+    color: #526158;
+}
+
+.notification-icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    place-items: center;
+    border-radius: 50%;
+    background: #c4dbe7;
+    color: #172127;
+    font-weight: 700;
+}
+
+body.dark-mode .notification-row {
+    border-color: #465159;
+    color: #f7fafc;
+}
+
+body.dark-mode .notification-row small,
+body.dark-mode .notification-row time {
+    color: #d7e0dc;
+}
+
+.profile-layout {
+    width: min(1120px, calc(100% - 32px));
+    margin: 32px auto 64px;
+}
+
+.profile-page .dashboard-container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 28px;
+    border: 1px solid #3a444c;
+    border-radius: 12px;
+    background: #20262b;
+    color: #f3f7f5;
+}
+
+.profile-page .dashboard-container > h1,
+.profile-page .dashboard-container p,
+.profile-page .dashboard-container strong,
+.profile-page .dashboard-container label,
+.profile-page .dashboard-container h2,
+.profile-page .dashboard-container a {
+    color: inherit;
+}
+
+.profile-page .dashboard-container form {
+    max-width: none;
+}
+
+.profile-page .dashboard-container input,
+.profile-page .dashboard-container textarea,
+.profile-page .dashboard-container select {
+    width: 100%;
+    max-width: none;
+}
+
+.profile-page .security-settings,
+.profile-page .account-data-settings,
+.profile-page .profile-badge,
+.profile-page form {
+    border-radius: 10px;
+}
+
+.profile-page .security-settings,
+.profile-page .account-data-settings {
+    margin-top: 18px;
+    padding: 20px;
+    border: 1px solid #3a444c;
+}
+
+.profile-page.light-mode .dashboard-container {
+    border-color: #d7e1dc;
+    background: #ffffff;
+    color: #17211c;
+}
+
+.profile-page.light-mode .dashboard-container input,
+.profile-page.light-mode .dashboard-container textarea,
+.profile-page.light-mode .dashboard-container select {
+    background: #f7faf8;
+    color: #17211c;
+    border-color: #ccd7d1;
+}
+
+.profile-page.light-mode .security-settings,
+.profile-page.light-mode .account-data-settings {
+    border-color: #d7e1dc;
+}
+
+.profile-page.dark-mode .dashboard-container input,
+.profile-page.dark-mode .dashboard-container textarea,
+.profile-page.dark-mode .dashboard-container select {
+    background: #171b1f;
+    color: #ffffff;
+    border-color: #465159;
+}
+
+.profile-back-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    margin-top: 18px;
+    padding: 10px 16px;
+    border: 1px solid #526158;
+    border-radius: 8px;
+    text-decoration: none;
+}
+
+.profile-page.dark-mode .profile-avatar,
+.profile-page.dark-mode .profile-image {
+    border: 1px solid #465159;
+}
+
+@media (min-width: 900px) {
+    .profile-layout {
+        width: min(1120px, calc(100% - 64px));
+    }
+
+    .profile-page .dashboard-container {
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+        gap: 24px;
+    }
+
+    .profile-page .dashboard-container > h1,
+    .profile-page .dashboard-container > p,
+    .profile-page .dashboard-container > form,
+    .profile-page .dashboard-container > section,
+    .profile-page .dashboard-container > a {
+        grid-column: 2;
+    }
+
+    .profile-page .dashboard-container > h1,
+    .profile-page .dashboard-container > p,
+    .profile-page .dashboard-container > .profile-avatar,
+    .profile-page .dashboard-container > .profile-image {
+        grid-column: 1;
+    }
+}
+
 .live-layout {
     width: min(760px, 94%);
     margin: 32px auto;
@@ -1191,6 +1361,7 @@ th {
 }
 
 .public-profile-header {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 24px;
@@ -1198,6 +1369,62 @@ th {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 14px;
+}
+
+.profile-banner {
+    position: absolute;
+    inset: 0 0 auto;
+    width: 100%;
+    height: 120px;
+    margin: 0;
+    border-radius: 14px 14px 0 0;
+    object-fit: cover;
+    box-shadow: none;
+}
+
+.public-profile-header:has(.profile-banner) {
+    padding-top: 150px;
+}
+
+.presence-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    width: fit-content;
+    margin: 8px 0;
+    padding: 6px 10px;
+    border: 1px solid #465159;
+    border-radius: 999px;
+}
+
+.presence-state span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #57bd8a;
+}
+
+.profile-interests,
+.profile-links {
+    overflow-wrap: anywhere;
+}
+
+body.dark-mode .public-profile-header,
+body.dark-mode .public-profile-info,
+body.dark-mode .public-profile-info h1,
+body.dark-mode .public-profile-info p,
+body.dark-mode .profile-handle,
+body.dark-mode .profile-stats {
+    color: #f7fafc;
+}
+
+body.light-mode .public-profile-header,
+body.light-mode .public-profile-info,
+body.light-mode .public-profile-info h1,
+body.light-mode .public-profile-info p,
+body.light-mode .profile-handle,
+body.light-mode .profile-stats {
+    color: #17211c;
 }
 
 .public-profile-avatar {
@@ -1398,43 +1625,76 @@ body.social-body {
     color: #111111;
 }
 
-.social-body .message-panel,
-.social-body .conversation-panel,
-.social-body .notification-panel,
-.social-body .new-message-box,
-.social-body .message-list,
-.social-body .person-row,
-.social-body .conversation-row,
-.social-body .message-bubble,
-.social-body .conversation-header,
-.social-body .section-heading,
-.social-body .reply-form,
-.social-body .group-members,
-.social-body .empty-feed,
-.social-body .conversation-link,
-.social-body .message-panel input,
-.social-body .conversation-panel input,
-.social-body .message-panel textarea,
-.social-body .conversation-panel textarea,
-.social-body .message-panel select,
-.social-body .conversation-panel select {
-    color: #111111;
+body.dark-mode .social-body .message-panel,
+body.dark-mode .social-body .conversation-panel,
+body.dark-mode .social-body .notification-panel,
+body.dark-mode .social-body .new-message-box,
+body.dark-mode .social-body .message-list,
+body.dark-mode .social-body .person-row,
+body.dark-mode .social-body .conversation-row,
+body.dark-mode .social-body .conversation-header,
+body.dark-mode .social-body .section-heading,
+body.dark-mode .social-body .reply-form,
+body.dark-mode .social-body .group-members,
+body.dark-mode .social-body .empty-feed,
+body.dark-mode .social-body .conversation-link {
+    color: #f7fafc;
 }
 
-.social-body .message-bubble.sent {
-    color: #111111;
+body.dark-mode .social-body .message-bubble.sent,
+body.dark-mode .social-body .message-bubble.received {
+    color: #ffffff;
 }
 
-.social-body .message-bubble.sent time,
-.social-body .message-bubble.received time,
-.social-body .person-row small,
-.social-body .person-row time,
-.social-body .conversation-header p,
-.social-body .section-heading span,
-.social-body .new-message-box h2,
-.social-body .subheading,
-.social-body .muted {
+body.dark-mode .social-body .message-bubble.sent {
+    background: #315a48;
+}
+
+body.dark-mode .social-body .message-bubble.received {
+    background: #20262b;
+    border-color: #465159;
+}
+
+body.dark-mode .social-body .message-bubble.sent time,
+body.dark-mode .social-body .message-bubble.received time,
+body.dark-mode .social-body .person-row small,
+body.dark-mode .social-body .person-row time,
+body.dark-mode .social-body .conversation-header p,
+body.dark-mode .social-body .section-heading span,
+body.dark-mode .social-body .muted {
+    color: #d7e0dc;
+}
+
+body.dark-mode .social-body .message-panel input,
+body.dark-mode .social-body .conversation-panel input,
+body.dark-mode .social-body .message-panel textarea,
+body.dark-mode .social-body .conversation-panel textarea,
+body.dark-mode .social-body .reply-form input {
+    background: #171b1f;
+    color: #ffffff;
+    border-color: #465159;
+}
+
+body.light-mode .social-body .message-bubble.sent {
+    background: #315a48;
+    color: #ffffff;
+}
+
+body.light-mode .social-body .message-bubble.received {
+    background: #ffffff;
     color: #111111;
+    border-color: #dfe6e2;
+}
+
+body.light-mode .social-body .message-bubble.sent time {
+    color: #ffffff;
+}
+
+body.light-mode .social-body .message-bubble.received time,
+body.light-mode .social-body .person-row small,
+body.light-mode .social-body .person-row time,
+body.light-mode .social-body .muted {
+    color: #526158;
 }
 
 .social-body .sidebar {

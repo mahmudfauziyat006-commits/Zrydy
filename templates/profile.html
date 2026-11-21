@@ -11,7 +11,16 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
-<body>
+<body class="social-body dark-mode profile-page">
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
+        <div class="nav-actions">
+            <a href="{{ url_for('dashboard') }}">Feed</a>
+            <a href="{{ url_for('messages') }}">Inbox</a>
+            <button type="button" class="theme-toggle" id="profile-theme-toggle">Light mode</button>
+        </div>
+    </nav>
+    <main class="profile-layout">
     <div class="dashboard-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -115,7 +124,24 @@
             </form>
         </section>
 
-        <a href="{{ url_for('dashboard') }}"><button>Back to Feed</button></a>
+        <a class="profile-back-link" href="{{ url_for('dashboard') }}">Back to Feed</a>
     </div>
+    </main>
+    <script>
+        const profileBody = document.body;
+        const profileToggle = document.getElementById('profile-theme-toggle');
+        const savedTheme = localStorage.getItem('zrydy-theme');
+        function applyProfileTheme(theme) {
+            profileBody.classList.toggle('dark-mode', theme === 'dark');
+            profileBody.classList.toggle('light-mode', theme === 'light');
+            profileToggle.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+        }
+        applyProfileTheme(savedTheme === 'light' ? 'light' : 'dark');
+        profileToggle.addEventListener('click', function () {
+            const nextTheme = profileBody.classList.contains('dark-mode') ? 'light' : 'dark';
+            localStorage.setItem('zrydy-theme', nextTheme);
+            applyProfileTheme(nextTheme);
+        });
+    </script>
 </body>
 </html>

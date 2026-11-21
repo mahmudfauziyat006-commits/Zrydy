@@ -21,6 +21,9 @@
     </nav>
     <main class="public-profile-layout">
         <section class="public-profile-header">
+            {% if user['banner_picture'] %}
+                <img class="profile-banner" src="{{ url_for('uploaded_file', filename=user['banner_picture']) }}" alt="{{ user['full_name'] }} profile banner">
+            {% endif %}
             {% if user['profile_picture'] %}
                 <img class="public-profile-avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
             {% else %}
@@ -30,6 +33,9 @@
                 <p class="profile-handle">@{{ user['username'] }}</p>
                 <h1>{{ user['full_name'] }}</h1>
                 <p>{{ user['bio'] or 'No bio yet.' }}</p>
+                <p class="presence-state"><span aria-hidden="true"></span>{{ user['presence_state'] or 'Sparked' }}</p>
+                {% if user['interests'] %}<p class="profile-interests"><strong>Interests:</strong> {{ user['interests'] }}</p>{% endif %}
+                {% if user['links'] %}<p class="profile-links"><strong>Links:</strong> {{ user['links'] }}</p>{% endif %}
                 <div class="profile-stats">
                     <span><strong>{{ user['post_count'] }}</strong> posts</span>
                     <span><strong>{{ user['like_count'] }}</strong> likes</span>

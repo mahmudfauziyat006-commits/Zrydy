@@ -16,8 +16,15 @@
             <div class="section-heading"><h1>Inbox</h1><span>Talk to your community{% if unread_message_count or unread_notification_count %} · {{ unread_message_count + unread_notification_count }} new{% endif %}</span></div>
             <section class="notification-panel" id="notifications">
                 <h2>Notifications</h2>
-                <p class="muted">New messages and follower activity appear here.</p>
-                <form method="POST" action="{{ url_for('mark_notifications_read') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Mark follower notifications read</button></form>
+                {% for alert in alerts %}
+                    <a class="notification-row {% if not alert['is_read'] %}unread{% endif %}" href="{{ alert['target_url'] or url_for('dashboard') }}">
+                        <span class="notification-icon">{{ alert['kind'][:1]|upper }}</span>
+                        <span><strong>{{ alert['actor_name'] or 'Zrydy' }}</strong><small>{{ alert['body'] }}</small><time>{{ alert['created_at'] }}</time></span>
+                    </a>
+                {% else %}
+                    <p class="muted">No notifications yet. Follows, likes, replies, reposts, messages, and Pulses will appear here.</p>
+                {% endfor %}
+                <form method="POST" action="{{ url_for('mark_notifications_read') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Mark all notifications read</button></form>
             </section>
             <div class="new-message-box">
                 <h2>Start a conversation</h2>
