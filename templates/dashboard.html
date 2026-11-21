@@ -161,8 +161,9 @@
             {% endif %}
             <p class="upload-note">Maximum video upload length: 10 minutes (up to 200 MB).</p>
 
+            <div class="post-grid">
             {% for post in posts %}
-                <article class="post-card" data-post-id="{{ post['id'] }}">
+                <article class="post-card nexus-post-card" data-post-id="{{ post['id'] }}">
                     <div class="post-main">
                         <header class="post-header">
                             <a class="post-avatar-link" href="{{ url_for('view_profile', user_id=post['user_id']) }}">
@@ -230,6 +231,7 @@
             {% else %}
                 <section class="empty-feed"><h2>Your feed is waiting</h2><p>Share your first photo, video, or thought above.</p></section>
             {% endfor %}
+            </div>
         </section>
 
         <aside class="sidebar suggestions">

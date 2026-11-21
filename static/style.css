@@ -905,7 +905,7 @@ body.profile-page select {
     border: 1px solid #465159;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
     .profile-layout {
         width: min(1120px, calc(100% - 64px));
     }
