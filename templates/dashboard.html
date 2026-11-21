@@ -254,9 +254,9 @@
                 <p class="muted">Your live connections will appear here.</p>
             {% endfor %}
             <h2>Trending Topics</h2>
-            <a class="nexus-topic" href="{{ url_for('dashboard', q='Live') }}"><span>1</span><strong>Live Connections</strong><small>Trending now</small></a>
-            <a class="nexus-topic" href="{{ url_for('dashboard', q='Creative') }}"><span>2</span><strong>Creative Work</strong><small>Rising topics</small></a>
-            <a class="nexus-topic" href="{{ url_for('dashboard', q='Community') }}"><span>3</span><strong>Community</strong><small>New conversations</small></a>
+            <a class="zrydy-topic" href="{{ url_for('dashboard', q='Live') }}"><span>1</span><strong>Live Connections</strong><small>Trending now</small></a>
+            <a class="zrydy-topic" href="{{ url_for('dashboard', q='Creative') }}"><span>2</span><strong>Creative Work</strong><small>Rising topics</small></a>
+            <a class="zrydy-topic" href="{{ url_for('dashboard', q='Community') }}"><span>3</span><strong>Community</strong><small>New conversations</small></a>
             <section class="pulse-composer" aria-label="Publish a Live Intent Pulse">
                 <h2>Live Intent</h2>
                 <form action="{{ url_for('create_pulse') }}" method="POST">
