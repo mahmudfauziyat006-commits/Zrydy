@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
 <body class="zrydy-unified social-body dark-mode">
-    <nav class="topbar">
+    <nav class="topbar nexus-topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
         <form class="search-form" action="{{ url_for('dashboard') }}" method="GET">
             <input type="search" name="q" placeholder="Search Zrydy">
@@ -47,8 +47,16 @@
         </div>
     </div>
 
-    <main class="feed-layout">
-        <aside class="sidebar profile-summary">
+    <main class="feed-layout nexus-feed-layout">
+        <aside class="sidebar nexus-left-rail profile-summary">
+            <div class="nexus-rail-brand"><span>Z</span><strong>ZRYDY</strong></div>
+            <nav class="nexus-rail-nav" aria-label="Primary navigation">
+                <a class="active" href="{{ url_for('dashboard') }}"><span>⌂</span><small>Home</small></a>
+                <a href="{{ url_for('dashboard', feed='live_radar') }}"><span>⌕</span><small>Explore</small></a>
+                <button type="button" id="desktop-create"><span>+</span><small>Create</small></button>
+                <a href="{{ url_for('messages') }}"><span>▢</span><small>Inbox</small></a>
+                <a href="{{ url_for('profile') }}"><span>●</span><small>Profile</small></a>
+            </nav>
             {% if user['profile_picture'] %}
                 <img class="avatar-image large-avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
             {% else %}
@@ -234,7 +242,21 @@
             </div>
         </section>
 
-        <aside class="sidebar suggestions">
+        <aside class="sidebar nexus-right-rail suggestions">
+            <h2>Live Connections</h2>
+            {% for person in people[:5] %}
+                <a class="nexus-live-person" href="{{ url_for('conversation', user_id=person['id']) }}">
+                    <span class="avatar">{{ person['full_name'][:1] }}</span>
+                    <span><strong>{{ person['full_name'] }}</strong><small>@{{ person['username'] }}</small></span>
+                    <b>•</b>
+                </a>
+            {% else %}
+                <p class="muted">Your live connections will appear here.</p>
+            {% endfor %}
+            <h2>Trending Topics</h2>
+            <a class="nexus-topic" href="{{ url_for('dashboard', q='Live') }}"><span>1</span><strong>Live Connections</strong><small>Trending now</small></a>
+            <a class="nexus-topic" href="{{ url_for('dashboard', q='Creative') }}"><span>2</span><strong>Creative Work</strong><small>Rising topics</small></a>
+            <a class="nexus-topic" href="{{ url_for('dashboard', q='Community') }}"><span>3</span><strong>Community</strong><small>New conversations</small></a>
             <section class="pulse-composer" aria-label="Publish a Live Intent Pulse">
                 <h2>Live Intent</h2>
                 <form action="{{ url_for('create_pulse') }}" method="POST">
