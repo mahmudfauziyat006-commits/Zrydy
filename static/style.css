@@ -3328,6 +3328,10 @@ body.zrydy-unified.info-page {
 body.zrydy-unified.light-mode,
 body.zrydy-unified.social-body.light-mode {
     background:
+        radial-gradient(ellipse at 72% 18%, rgba(107, 166, 230, 0.10), transparent 34%),
+        radial-gradient(ellipse at 18% 82%, rgba(68, 113, 173, 0.08), transparent 38%),
+        linear-gradient(135deg, #edf5ff 0%, #f5f8fd 48%, #edf1f8 100%) !important;
+    background:
         radial-gradient(circle at 78% 12%, rgba(89, 159, 224, 0.12), transparent 28%),
         linear-gradient(145deg, #edf5ff 0%, #f6f9ff 58%, #edf1ff 100%) !important;
 }
