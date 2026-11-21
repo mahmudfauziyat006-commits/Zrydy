@@ -3602,6 +3602,84 @@ body.zrydy-unified.auth-page.light-mode .auth-container {
 }
 
 @media (max-width: 600px) {
+    body.zrydy-unified .zrydy-topbar {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas: "brand search activity";
+        align-items: center;
+        column-gap: 8px;
+    }
+
+    body.zrydy-unified .zrydy-topbar .brand {
+        grid-area: brand;
+    }
+
+    body.zrydy-unified .zrydy-topbar .search-form {
+        grid-area: search;
+        width: 100%;
+    }
+
+    body.zrydy-unified .zrydy-mobile-activity {
+        grid-area: activity;
+        display: flex;
+        width: auto;
+        gap: 4px;
+        overflow: visible;
+        padding: 0;
+    }
+
+    body.zrydy-unified .zrydy-mobile-activity a {
+        position: relative;
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+    }
+
+    body.zrydy-unified .zrydy-mobile-activity a small {
+        display: none;
+    }
+
+    body.zrydy-unified .zrydy-mobile-activity a b {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        display: grid;
+        min-width: 17px;
+        height: 17px;
+        place-items: center;
+        border-radius: 9px;
+        background: #57bd8a;
+        color: #102018;
+        font-size: 0.62rem;
+    }
+
+    body.zrydy-unified .zrydy-mobile-activity a b:empty {
+        display: none;
+    }
+
+    body.zrydy-unified .stories-section {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+    }
+
+    body.zrydy-unified .stories-heading,
+    body.zrydy-unified .stories-rail {
+        margin-right: 12px;
+        margin-left: 12px;
+    }
+
+    body.zrydy-unified .stories-rail {
+        min-height: 118px;
+        align-items: center;
+    }
+
     body.zrydy-unified .zrydy-feed-layout,
     body.zrydy-unified .feed-column,
     body.zrydy-unified .post-grid,
