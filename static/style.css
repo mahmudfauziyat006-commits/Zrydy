@@ -3566,3 +3566,69 @@ body.zrydy-unified.auth-page.light-mode .auth-container {
     }
 }
 
+@media (min-width: 601px) and (max-width: 900px) {
+    body.zrydy-unified .zrydy-feed-layout {
+        width: min(820px, calc(100% - 24px));
+        margin-inline: auto;
+        justify-content: center;
+    }
+
+    body.zrydy-unified .feed-column,
+    body.zrydy-unified .post-grid,
+    body.zrydy-unified .stories-section,
+    body.zrydy-unified .composer,
+    body.zrydy-unified .feed-heading,
+    body.zrydy-unified .feed-tabs {
+        width: 100%;
+        max-width: 680px;
+        margin-inline: auto;
+    }
+
+    body.zrydy-unified .post-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        justify-content: center;
+    }
+
+    body.zrydy-unified .zrydy-mobile-dock {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    body.zrydy-unified .zrydy-feed-layout,
+    body.zrydy-unified .feed-column,
+    body.zrydy-unified .post-grid,
+    body.zrydy-unified .stories-section,
+    body.zrydy-unified .composer,
+    body.zrydy-unified .feed-heading,
+    body.zrydy-unified .feed-tabs,
+    body.zrydy-unified .messages-layout,
+    body.zrydy-unified .conversation-layout,
+    body.zrydy-unified .public-profile-layout,
+    body.zrydy-unified .profile-layout,
+    body.zrydy-unified .live-layout {
+        width: calc(100% - 20px);
+        max-width: 520px;
+        margin-inline: auto;
+    }
+
+    body.zrydy-unified .post-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    body.zrydy-unified .feed-column {
+        display: block;
+    }
+
+    body.zrydy-unified .stories-rail,
+    body.zrydy-unified .feed-tabs {
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+
+    body.zrydy-unified .zrydy-post-card {
+        width: 100%;
+        margin-inline: auto;
+    }
+}
+
