@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261005') }}">
 </head>
 <body class="zrydy-unified social-body dark-mode">
-    <nav class="topbar nexus-topbar">
+    <nav class="topbar zrydy-topbar">
         <a class="brand" href="{{ url_for('dashboard') }}">zrydy</a>
         <form class="search-form" action="{{ url_for('dashboard') }}" method="GET">
             <input type="search" name="q" placeholder="Search Zrydy">
@@ -47,10 +47,10 @@
         </div>
     </div>
 
-    <main class="feed-layout nexus-feed-layout">
-        <aside class="sidebar nexus-left-rail profile-summary">
-            <div class="nexus-rail-brand"><span>Z</span><strong>ZRYDY</strong></div>
-            <nav class="nexus-rail-nav" aria-label="Primary navigation">
+    <main class="feed-layout zrydy-feed-layout">
+        <aside class="sidebar zrydy-left-rail profile-summary">
+            <div class="zrydy-rail-brand"><span>Z</span><strong>ZRYDY</strong></div>
+            <nav class="zrydy-rail-nav" aria-label="Primary navigation">
                 <a class="active" href="{{ url_for('dashboard') }}"><span>⌂</span><small>Home</small></a>
                 <a href="{{ url_for('dashboard', feed='live_radar') }}"><span>⌕</span><small>Explore</small></a>
                 <button type="button" id="desktop-create"><span>+</span><small>Create</small></button>
@@ -171,7 +171,7 @@
 
             <div class="post-grid">
             {% for post in posts %}
-                <article class="post-card nexus-post-card" data-post-id="{{ post['id'] }}">
+                <article class="post-card zrydy-post-card" data-post-id="{{ post['id'] }}">
                     <div class="post-main">
                         <header class="post-header">
                             <a class="post-avatar-link" href="{{ url_for('view_profile', user_id=post['user_id']) }}">
@@ -242,10 +242,10 @@
             </div>
         </section>
 
-        <aside class="sidebar nexus-right-rail suggestions">
+        <aside class="sidebar zrydy-right-rail suggestions">
             <h2>Live Connections</h2>
             {% for person in people[:5] %}
-                <a class="nexus-live-person" href="{{ url_for('conversation', user_id=person['id']) }}">
+                <a class="zrydy-live-person" href="{{ url_for('conversation', user_id=person['id']) }}">
                     <span class="avatar">{{ person['full_name'][:1] }}</span>
                     <span><strong>{{ person['full_name'] }}</strong><small>@{{ person['username'] }}</small></span>
                     <b>•</b>
