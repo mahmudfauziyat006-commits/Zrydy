@@ -3267,6 +3267,35 @@ body.story-open {
     }
 }
 
+body.zrydy-unified .zrydy-feed-layout,
+body.zrydy-unified .zrydy-feed-layout > * {
+    justify-items: center;
+}
+
+body.zrydy-unified .feed-column,
+body.zrydy-unified .feed-heading,
+body.zrydy-unified .feed-tabs,
+body.zrydy-unified .post-grid,
+body.zrydy-unified .stories-section,
+body.zrydy-unified .composer {
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+}
+
+body.zrydy-unified .feed-tabs {
+    justify-content: center;
+}
+
+body.zrydy-unified .post-grid {
+    align-items: start;
+    justify-content: center;
+}
+
+body.zrydy-unified .zrydy-rail-nav button {
+    align-self: center;
+}
+
 :root {
     --zrydy-canvas-dark: #07111f;
     --zrydy-surface-dark: #101b2d;
