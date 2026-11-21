@@ -1942,7 +1942,7 @@ def about():
 
 @app.route('/contact')
 def contact():
-    return info_page('Contact', 'Contact Us', 'Phone: <a href="tel:08113373935">08113373935</a><br>Email: support@zrydy.com')
+    return info_page('Contact', 'Contact Us', 'Phone: <a href="tel:08113373935">08113373935</a><br>Email: <a href="mailto:mahmudhafeez001@gmail.com">mahmudhafeez001@gmail.com</a>')
 
 
 @app.route('/help')
