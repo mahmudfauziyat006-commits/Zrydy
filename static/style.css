@@ -2924,6 +2924,167 @@ body.story-open {
     }
 }
 
+.nexus-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+.nexus-left-rail {
+    position: sticky;
+    top: 94px;
+    align-self: start;
+    width: 100%;
+}
+
+.nexus-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 18px;
+}
+
+.nexus-rail-brand span {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid #7da8c1;
+    border-radius: 10px;
+    background: #bce5f2;
+    color: #172127;
+    font-weight: 900;
+}
+
+.nexus-rail-brand strong {
+    letter-spacing: 0.08em;
+}
+
+.nexus-rail-nav {
+    display: grid;
+    gap: 7px;
+}
+
+.nexus-rail-nav a,
+.nexus-rail-nav button {
+    display: flex;
+    min-height: 58px;
+    width: 100%;
+    margin: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.nexus-rail-nav a.active,
+.nexus-rail-nav a:hover,
+.nexus-rail-nav button:hover {
+    background: rgba(196, 219, 231, 0.10);
+    color: var(--text);
+}
+
+.nexus-rail-nav span {
+    font-size: 1.35rem;
+}
+
+.nexus-rail-nav small {
+    font-size: 0.68rem;
+}
+
+.nexus-rail-nav button {
+    border-radius: 12px;
+}
+
+.nexus-rail-nav button span {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid #91b5cb;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #57bd8a, #80c5dd 55%, #dca66f);
+    color: #172127;
+    font-size: 1.6rem;
+}
+
+.nexus-right-rail {
+    position: sticky;
+    top: 94px;
+    align-self: start;
+}
+
+.nexus-live-person,
+.nexus-topic {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 52px;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.nexus-live-person > span:nth-child(2),
+.nexus-topic {
+    min-width: 0;
+}
+
+.nexus-live-person strong,
+.nexus-live-person small,
+.nexus-topic strong,
+.nexus-topic small {
+    display: block;
+}
+
+.nexus-live-person small,
+.nexus-topic small {
+    color: var(--muted);
+}
+
+.nexus-live-person b {
+    margin-left: auto;
+    color: #57bd8a;
+}
+
+.nexus-topic {
+    position: relative;
+    flex-wrap: wrap;
+    padding-left: 28px;
+}
+
+.nexus-topic span {
+    position: absolute;
+    left: 0;
+}
+
+.post-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.nexus-post-card {
+    grid-template-columns: minmax(0, 1fr) 48px;
+    min-width: 0;
+}
+
+.nexus-post-card .post-media {
+    width: 100%;
+    max-height: 330px;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.nexus-post-card .post-caption {
+    max-height: 72px;
+    overflow: hidden;
+}
+
 .zrydy-mobile-dock,
 .create-sheet {
     display: none;
