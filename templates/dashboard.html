@@ -72,33 +72,6 @@
                 {% endwith %}
             </div>
 
-            <section class="composer zrydy-quick-composer">
-                {% if user['profile_picture'] %}
-                    <img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
-                {% else %}
-                    <div class="avatar">{{ user['full_name'][:1] }}</div>
-                {% endif %}
-                <form action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <textarea id="post-caption" name="caption" rows="3" placeholder="What's happening, {{ user['full_name'].split()[0] }}?"></textarea>
-                    <div class="composer-actions">
-                        <button type="button" class="tool-button" data-emoji-target="post-caption">😊 Emojis</button>
-                        <button type="button" class="tool-button" data-sticker-target="post-caption">Sticker</button>
-                        <label class="media-picker" for="media">Add photo or video</label>
-                        <input class="hidden-input" type="file" id="media" name="media" accept="image/*,video/*">
-                        <label class="camera-picker" for="camera">Use camera</label>
-                        <input class="hidden-input" type="file" id="camera" name="camera_media" accept="image/*,video/*" capture="environment">
-                        <label><input type="checkbox" name="living_drop"> Living Drop</label>
-                        <select name="privacy" aria-label="Post privacy">
-                            <option value="public">Public</option>
-                            <option value="circle">Circle</option>
-                            <option value="private">Private</option>
-                        </select>
-                        <button type="submit">Post</button>
-                    </div>
-                </form>
-            </section>
-
             <section class="stories-section" aria-label="Stories">
                 <div class="stories-heading"><h2>Stories</h2><span>Disappear after 24 hours</span></div>
                 <div class="stories-rail">
