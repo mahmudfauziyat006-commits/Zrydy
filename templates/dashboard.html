@@ -29,6 +29,24 @@
         </div>
     </nav>
 
+    <nav class="zrydy-mobile-dock" aria-label="Primary navigation">
+        <a href="{{ url_for('dashboard') }}" class="dock-item active"><span>⌂</span><small>Home</small></a>
+        <a href="{{ url_for('dashboard', feed='live_radar') }}" class="dock-item"><span>⌕</span><small>Explore</small></a>
+        <button type="button" class="dock-create" id="mobile-create" aria-label="Create">+</button>
+        <a href="{{ url_for('messages') }}" class="dock-item"><span>▣</span><small>Inbox</small></a>
+        <a href="{{ url_for('profile') }}" class="dock-item"><span>●</span><small>Profile</small></a>
+    </nav>
+
+    <div class="create-sheet" id="create-sheet" hidden>
+        <button type="button" class="create-sheet-close" aria-label="Close create menu">×</button>
+        <div class="create-sheet-grid">
+            <a href="{{ url_for('create_post') }}"><span>＋</span><strong>Post</strong></a>
+            <button type="button" id="create-live-drop"><span>↗</span><strong>Living Drop</strong></button>
+            <a href="{{ url_for('live') }}"><span>◉</span><strong>Go Live</strong></a>
+            <a href="{{ url_for('pulse_room', pulse_id=pulses[0]['id']) if pulses else url_for('dashboard') }}"><span>⚡</span><strong>Pulse</strong></a>
+        </div>
+    </div>
+
     <main class="feed-layout">
         <aside class="sidebar profile-summary">
             {% if user['profile_picture'] %}
