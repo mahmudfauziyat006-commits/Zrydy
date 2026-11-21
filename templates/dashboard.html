@@ -305,8 +305,6 @@
             };
             video.src = URL.createObjectURL(file);
         }
-        document.getElementById('media').addEventListener('change', function () { validateVideoDuration(this); });
-        document.getElementById('camera').addEventListener('change', function () { validateVideoDuration(this); });
 
         const savedTheme = localStorage.getItem('zrydy-theme');
         const initialTheme = savedTheme === 'light' ? 'light' : 'dark';
