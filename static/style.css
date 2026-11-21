@@ -3470,6 +3470,9 @@ body.zrydy-unified.auth-page.light-mode .auth-container {
 
 @media (max-width: 600px) {
     body.zrydy-unified.social-body {
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
         padding: 0 0 calc(82px + env(safe-area-inset-bottom));
     }
 
