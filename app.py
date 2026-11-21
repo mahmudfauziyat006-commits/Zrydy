@@ -1599,6 +1599,9 @@ def toggle_like(post_id):
         flash('Post liked.', 'success')
 
     db.commit()
+    like_count = fetch_scalar('SELECT COUNT(*) FROM likes WHERE post_id = ?', (post_id,)) or 0
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return jsonify({'liked': existing is None, 'likeCount': like_count})
     return redirect(url_for('dashboard'))
 
 
@@ -1666,6 +1669,9 @@ def add_comment(post_id):
         flash(f'Comment posted: {comment}', 'success')
     else:
         flash('Please write a comment before posting.', 'error')
+    if request.headers.get('X-Requested-With') == 'fetch':
+        comment_count = fetch_scalar('SELECT COUNT(*) FROM comments WHERE post_id = ?', (post_id,)) or 0
+        return jsonify({'comment': comment, 'commentCount': comment_count})
     return redirect(url_for('dashboard'))
 
 
@@ -1749,6 +1755,9 @@ def toggle_saved_post(post_id):
         db.execute('INSERT INTO saved_posts (user_id, post_id) VALUES (?, ?)', (session['user_id'], post_id))
         flash('Post saved.', 'success')
     db.commit()
+    saved = existing is None
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return jsonify({'saved': saved})
     return redirect(request.referrer or url_for('dashboard'))
 
 
@@ -1772,6 +1781,9 @@ def toggle_repost(post_id):
         notify(post['user_id'], session['user_id'], 'repost', f"{session.get('username', 'Someone')} reposted your post.", url_for('dashboard'))
         flash('Post reposted.', 'success')
     db.commit()
+    repost_count = fetch_scalar('SELECT COUNT(*) FROM reposts WHERE post_id = ?', (post_id,)) or 0
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return jsonify({'reposted': existing is None, 'repostCount': repost_count})
     return redirect(request.referrer or url_for('dashboard'))
 
 
