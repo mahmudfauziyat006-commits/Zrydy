@@ -1,22 +1,22 @@
-<<<<<<< HEAD
 *.pyc
 *.py[codz]
 *$py.class
 *.pyd
 .env
+.envrc
 .venv/
 venv/
-*.sqlite3
 env/
-.pytest_cache/
-.coverage
-htmlcov/
+*.sqlite3
 *.db
 users.txt
 uploads/
+private_uploads/
+.pytest_cache/
+.coverage
+htmlcov/
 .DS_Store
-=======
-
+Thumbs.db
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -158,4 +158,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
->>>>>>> origin/main
+
