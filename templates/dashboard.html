@@ -19,9 +19,9 @@
         <form class="search-form" action="{{ url_for('dashboard') }}" method="GET">
             <input type="search" name="q" placeholder="Search Zrydy">
         </form>
-        <div class="nav-actions">
-            <a href="{{ url_for('messages') }}" id="messages-link">Inbox{% if unread_message_count %} ({{ unread_message_count }}){% endif %}</a>
-            <a href="#notifications" id="notification-link">Notifications{% if unread_notification_count %} ({{ unread_notification_count }}){% endif %}</a>
+        <div class="nav-actions zrydy-mobile-activity">
+            <a href="{{ url_for('messages') }}" id="messages-link"><span aria-hidden="true">▣</span><b>{% if unread_message_count %}{{ unread_message_count }}{% endif %}</b><small>Inbox</small></a>
+            <a href="{{ url_for('messages') }}#notifications" id="notification-link"><span aria-hidden="true">◉</span><b>{% if unread_notification_count %}{{ unread_notification_count }}{% endif %}</b><small>Alerts</small></a>
             <a href="{{ url_for('profile') }}">Profile</a>
             <button type="button" class="theme-toggle" id="theme-toggle">Dark mode</button>
             {% if session.get('is_admin') %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
