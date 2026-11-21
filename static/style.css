@@ -3508,7 +3508,7 @@ body.zrydy-unified.auth-page.light-mode .auth-container {
     body.zrydy-unified .zrydy-feed-layout {
         grid-template-columns: minmax(0, 1fr);
         width: 100%;
-        margin: 10px auto 0;
+        margin: 0 auto;
     }
 
     body.zrydy-unified .zrydy-left-rail,
@@ -3528,6 +3528,21 @@ body.zrydy-unified.auth-page.light-mode .auth-container {
     body.zrydy-unified .composer {
         margin-right: 10px;
         margin-left: 10px;
+    }
+
+    body.zrydy-unified .stories-section {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+    }
+
+    body.zrydy-unified .stories-heading,
+    body.zrydy-unified .stories-rail {
+        margin-right: 12px;
+        margin-left: 12px;
     }
 
     body.zrydy-unified .post-grid {
@@ -3616,6 +3631,8 @@ body.zrydy-unified.auth-page.light-mode .auth-container {
     body.zrydy-unified .feed-tabs {
         justify-content: flex-start;
         overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
     }
 
     body.zrydy-unified .zrydy-post-card {
