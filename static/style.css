@@ -720,6 +720,97 @@ body.dark-mode .notification-row time {
     color: #d7e0dc;
 }
 
+body.zrydy-unified,
+body.social-body,
+body.auth-page,
+body.profile-page,
+body.info-page {
+    --canvas: #171b1f;
+    --surface: #20262b;
+    --surface-raised: #293139;
+    --line: #3a444c;
+    --text: #f4f7f5;
+    --muted: #aab4ba;
+    --accent: #c4dbe7;
+    --accent-strong: #aecbd9;
+    --warm: #e5a98d;
+    background: #171b1f;
+    color: #f4f7f5;
+}
+
+body.light-mode.zrydy-unified,
+body.light-mode.social-body,
+body.light-mode.auth-page,
+body.light-mode.profile-page,
+body.light-mode.info-page {
+    --canvas: #f3f7f4;
+    --surface: #ffffff;
+    --surface-raised: #edf3ef;
+    --line: #d7e1dc;
+    --text: #17211c;
+    --muted: #5e6d65;
+    --accent: #315a48;
+    --accent-strong: #20574e;
+    --warm: #a66f52;
+    background: #f3f7f4;
+    color: #17211c;
+}
+
+body.zrydy-unified .topbar,
+body.social-body .topbar,
+body.auth-page,
+body.profile-page,
+body.info-page,
+body.zrydy-unified {
+    font-family: "Aptos", "Segoe UI", sans-serif;
+    letter-spacing: 0;
+}
+
+body.zrydy-unified .dashboard-container,
+body.profile-page .dashboard-container,
+body.auth-page .auth-container,
+body.info-page .auth-container,
+body.social-body .message-panel,
+body.social-body .conversation-panel,
+body.social-body .public-profile-header,
+body.social-body .sidebar,
+body.social-body .composer,
+body.social-body .post-card,
+body.social-body .people-results,
+body.social-body .public-post-row,
+body.social-body .live-panel {
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.12);
+    color: var(--text);
+}
+
+body.zrydy-unified button,
+body.social-body button,
+body.auth-page button,
+body.profile-page button,
+body.info-page button,
+body.zrydy-unified .primary-link,
+body.social-body .primary-link {
+    min-height: 44px;
+    border-radius: 9px;
+}
+
+body.zrydy-unified input,
+body.zrydy-unified textarea,
+body.zrydy-unified select,
+body.social-body input,
+body.social-body textarea,
+body.social-body select,
+body.auth-page input,
+body.profile-page input,
+body.profile-page textarea,
+body.profile-page select {
+    min-height: 44px;
+    border-radius: 9px;
+}
+
 .profile-layout {
     width: min(1120px, calc(100% - 32px));
     margin: 32px auto 64px;
@@ -1531,7 +1622,7 @@ body {
 }
 
 body.social-body {
-    min-height: 100vh;
+    min-height: 100dvh;
     background-color: var(--canvas);
     background-image: linear-gradient(145deg, rgba(197, 216, 225, 0.055), transparent 42%),
         linear-gradient(315deg, rgba(229, 169, 141, 0.035), transparent 46%);
