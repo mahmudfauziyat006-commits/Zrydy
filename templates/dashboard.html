@@ -57,15 +57,10 @@
                 <a href="{{ url_for('messages') }}"><span>▢</span><small>Inbox</small></a>
                 <a href="{{ url_for('profile') }}"><span>●</span><small>Profile</small></a>
             </nav>
-            {% if user['profile_picture'] %}
-                <img class="avatar-image large-avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
-            {% else %}
-                <div class="large-avatar">{{ user['full_name'][:1] }}</div>
-            {% endif %}
-            <h2>{{ user['full_name'] }}</h2>
-            <p>@{{ user['username'] }}</p>
-            <p class="muted">{{ user['bio'] or 'Share your story with the Zrydy community.' }}</p>
-            <a class="outline-link" href="{{ url_for('profile') }}">Edit profile</a>
+            <a class="zrydy-rail-profile" href="{{ url_for('profile') }}">
+                {% if user['profile_picture'] %}<img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">{% else %}<span class="avatar">{{ user['full_name'][:1] }}</span>{% endif %}
+                <small>Profile</small>
+            </a>
         </aside>
 
         <section class="feed-column">
@@ -77,7 +72,7 @@
                 {% endwith %}
             </div>
 
-            <section class="composer">
+            <section class="composer zrydy-quick-composer">
                 {% if user['profile_picture'] %}
                     <img class="avatar-image avatar" src="{{ url_for('uploaded_file', filename=user['profile_picture']) }}" alt="{{ user['full_name'] }} profile picture">
                 {% else %}
@@ -134,6 +129,7 @@
                 </div>
             </section>
 
+            <section class="zrydy-stories-first">
             <div class="feed-heading">
                 <h1>{% if query %}Search results{% else %}Latest posts{% endif %}</h1>
                 <span>{{ posts|length }} posts</span>
@@ -240,6 +236,7 @@
                 <section class="empty-feed"><h2>Your feed is waiting</h2><p>Share your first photo, video, or thought above.</p></section>
             {% endfor %}
             </div>
+            </section>
         </section>
 
         <aside class="sidebar zrydy-right-rail suggestions">
