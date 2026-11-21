@@ -1202,6 +1202,29 @@ body.profile-page select {
     border-radius: 999px;
 }
 
+@media (min-width: 901px) {
+    .social-body .nexus-feed-layout {
+        grid-template-columns: 180px minmax(520px, 720px) 260px;
+        width: min(1220px, calc(100% - 40px));
+    }
+}
+
+@media (min-width: 901px) and (max-width: 1120px) {
+    .social-body .nexus-feed-layout {
+        grid-template-columns: 96px minmax(500px, 1fr) 220px;
+        width: calc(100% - 32px);
+    }
+
+    .nexus-rail-brand strong,
+    .nexus-rail-nav small {
+        display: none;
+    }
+
+    .nexus-rail-brand {
+        justify-content: center;
+    }
+}
+
 @media (max-width: 900px) {
     .feed-layout {
         grid-template-columns: 1fr;
