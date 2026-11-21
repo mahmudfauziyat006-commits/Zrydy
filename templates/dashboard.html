@@ -326,6 +326,20 @@
             localStorage.setItem('zrydy-theme', nextTheme);
             this.textContent = nextTheme === 'dark' ? 'Light mode' : 'Dark mode';
         });
+        const mobileCreate = document.getElementById('mobile-create');
+        const createSheet = document.getElementById('create-sheet');
+        const createSheetClose = createSheet ? createSheet.querySelector('.create-sheet-close') : null;
+        if (mobileCreate && createSheet) {
+            mobileCreate.addEventListener('click', function () {
+                createSheet.hidden = !createSheet.hidden;
+            });
+        }
+        if (createSheetClose && createSheet) {
+            createSheetClose.addEventListener('click', function () {
+                createSheet.hidden = true;
+            });
+        }
+
         document.querySelectorAll('[data-emoji-target]').forEach(button => button.addEventListener('click', function () {
             document.getElementById(this.dataset.emojiTarget).value += ' 😊 ❤️ 😂 🔥 🙌';
         }));
